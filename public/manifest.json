@@ -1,0 +1,19 @@
+{
+  "name": "覚える君 ── 忘れた頃にやってくる復習コーチ",
+  "short_name": "覚える君",
+  "description": "忘れたタイミングで向こうから出題される、アウトプット型のパーソナル復習AIコーチ",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#D9A441",
+  "theme_color": "#D9A441",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

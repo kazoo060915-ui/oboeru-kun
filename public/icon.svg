@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="100" fill="#D9A441" />
+  <!-- 外枠の墨色ボーダー -->
+  <rect x="24" y="24" width="464" height="464" rx="80" fill="#F7F1E3" stroke="#1A1714" stroke-width="16" />
+  
+  <!-- 判子（朱色の丸） -->
+  <circle cx="256" cy="256" r="160" fill="#B83227" />
+  <circle cx="256" cy="256" r="148" fill="none" stroke="#F7F1E3" stroke-width="6" stroke-dasharray="24 10" />
+  
+  <!-- 覚の漢字ロゴ -->
+  <text x="256" y="295" font-family="'Hiragino Mincho ProN', 'Yu Mincho', 'Sawarabi Mincho', serif" font-size="190" font-weight="900" fill="#F7F1E3" text-anchor="middle" dominant-baseline="central">覚</text>
+  
+  <!-- 小さなアクセント印 -->
+  <rect x="330" y="130" width="36" height="36" rx="6" fill="#D9A441" stroke="#1A1714" stroke-width="4" />
+  <text x="348" y="152" font-family="sans-serif" font-size="20" font-weight="bold" fill="#1A1714" text-anchor="middle" dominant-baseline="central">君</text>
+</svg>
