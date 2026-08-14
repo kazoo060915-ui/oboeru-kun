@@ -354,7 +354,7 @@ export default function Home() {
             {/* 復習キュー状況カード */}
             {due.length > 0 ? (
               <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
-                <p className="text-sm font-bold text-[#1A1714]/70">今日ぶり返す用語</p>
+                <p className="text-sm font-bold text-[#1A1714]/70">今日復習する用語</p>
                 <p className="font-serif text-6xl font-bold leading-none text-[#1A1714]">
                   {due.length}
                   <span className="ml-2 font-sans text-base font-normal">件</span>
