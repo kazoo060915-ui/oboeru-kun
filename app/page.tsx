@@ -298,6 +298,32 @@ export default function Home() {
     }
   };
 
+  // 出題中・結果画面から不要な用語を即座に削除・除外する関数
+  const handleDeleteCurrentTerm = async () => {
+    if (!current) return;
+    if (!window.confirm(`用語「${current.term}」を復習から削除（除外）してもよろしいですか？`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/terms?id=${encodeURIComponent(current.id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok && terms) {
+        setTerms(terms.filter((t) => t.id !== current.id));
+      }
+
+      // セッション中なら次の問題へ、またはセッション完了ならホームへ
+      if (sessionLimit > 0 && sessionIndex >= sessionLimit) {
+        setView('session_summary');
+      } else {
+        startQuiz(false, selectedTag, false);
+      }
+    } catch {
+      setError('用語の削除に失敗しました。');
+    }
+  };
+
   // レベル別集計
   const levelCounts = [0, 1, 2, 3, 4].map(
     (lvl) => (terms || []).filter((t) => t.level === lvl).length
@@ -724,9 +750,18 @@ export default function Home() {
 
             <div className="flex items-center justify-between">
               <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">お題</p>
-              <span className="border border-[#1A1714] bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-[#1A1714]">
-                🏷️ {getTermTag(current)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="border border-[#1A1714] bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-[#1A1714]">
+                  🏷️ {getTermTag(current)}
+                </span>
+                <button
+                  onClick={handleDeleteCurrentTerm}
+                  title="この用語を復習から除外（削除）する"
+                  className="flex items-center gap-1 border border-[#B83227]/40 bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-[#B83227] hover:bg-[#B83227] hover:text-white transition-colors"
+                >
+                  🗑️ 除外
+                </button>
+              </div>
             </div>
             <h2 className="mt-1 font-serif text-3xl font-bold">{current.term}</h2>
             <div className="mt-2 h-1 w-24 bg-[#B83227]" />
@@ -817,13 +852,22 @@ export default function Home() {
               <div className="absolute right-4 top-4">
                 <Stamp score={result.score} />
               </div>
-              <div className="flex items-center gap-2">
-                <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">
-                  {current.term}
-                </p>
-                <span className="border border-[#1A1714]/30 bg-white px-1.5 py-0.2 font-mono text-[10px] text-[#1A1714]/70">
-                  🏷️ {getTermTag(current)}
-                </span>
+              <div className="flex items-center justify-between pr-20">
+                <div className="flex items-center gap-2">
+                  <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">
+                    {current.term}
+                  </p>
+                  <span className="border border-[#1A1714]/30 bg-white px-1.5 py-0.2 font-mono text-[10px] text-[#1A1714]/70">
+                    🏷️ {getTermTag(current)}
+                  </span>
+                </div>
+                <button
+                  onClick={handleDeleteCurrentTerm}
+                  title="この用語を復習から除外（削除）する"
+                  className="font-mono text-[10px] text-[#B83227] underline hover:text-[#9c2a20]"
+                >
+                  🗑️ 復習から外す
+                </button>
               </div>
               <p className="mt-4 pr-24 font-serif text-xl font-bold leading-relaxed text-[#1A1714]">
                 「{result.tsukkomi}」
