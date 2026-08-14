@@ -22,7 +22,7 @@ const addDaysStr = (n: number) => {
 
 export default function Home() {
   const [terms, setTerms] = useState<Term[] | null>(null);
-  const [view, setView] = useState<'home' | 'quiz' | 'result' | 'add'>('home');
+  const [view, setView] = useState<'home' | 'quiz' | 'result' | 'add' | 'session_summary'>('home');
   const [current, setCurrent] = useState<Term | null>(null);
   const [answer, setAnswer] = useState('');
   const [result, setResult] = useState<{
@@ -38,6 +38,11 @@ export default function Home() {
   const [newTerm, setNewTerm] = useState('');
   const [newNote, setNewNote] = useState('');
   const [newTag, setNewTag] = useState('');
+
+  // セッション問題数設定 (3 | 5 | 10 | 0 = 無制限)
+  const [sessionLimit, setSessionLimit] = useState<number>(3);
+  const [sessionIndex, setSessionIndex] = useState<number>(1);
+  const [sessionScores, setSessionScores] = useState<number[]>([]);
 
   // 分野・講義回フィルター ('all' | 'due' | タグ名)
   const [selectedTag, setSelectedTag] = useState<string>('all');
@@ -137,7 +142,7 @@ export default function Home() {
     return filteredTerms.filter((t) => t.next_review_at <= today);
   }, [filteredTerms, selectedTag, due, today]);
 
-  const startQuiz = (forceAll?: boolean, targetTag?: string) => {
+  const startQuiz = (forceAll?: boolean, targetTag?: string, resetSession: boolean = true) => {
     const tagToUse = targetTag !== undefined ? targetTag : selectedTag;
     let targetPool: Term[] = [];
 
@@ -162,6 +167,14 @@ export default function Home() {
     setChatInput('');
     setError('');
     setShowHint(false);
+
+    if (resetSession) {
+      setSessionIndex(1);
+      setSessionScores([]);
+    } else {
+      setSessionIndex((prev) => prev + 1);
+    }
+
     setView('quiz');
   };
 
@@ -193,6 +206,7 @@ export default function Home() {
       }
 
       setResult(data.result);
+      setSessionScores((prev) => [...prev, data.result.score]);
 
       // 用語状態を更新
       if (terms) {
@@ -481,27 +495,84 @@ export default function Home() {
                 <p className="mt-1 text-xs text-[#1A1714]/70">
                   この分野の用語だけを集中して叩き込みます。
                 </p>
+
+                {/* 問題数コース選択 */}
+                <div className="mt-4 border-t border-[#1A1714]/15 pt-3">
+                  <p className="text-[11px] font-bold text-[#1A1714]/70 mb-1.5">何問チャレンジする？</p>
+                  <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
+                    {[
+                      { count: 3, label: '3問', time: '1分' },
+                      { count: 5, label: '5問', time: '3分' },
+                      { count: 10, label: '10問', time: '5分' },
+                      { count: 0, label: '全問', time: '無制限' },
+                    ].map((c) => (
+                      <button
+                        key={c.count}
+                        onClick={() => setSessionLimit(c.count)}
+                        className={`border-2 p-1.5 text-center transition-all ${
+                          sessionLimit === c.count
+                            ? 'border-[#1A1714] bg-[#1A1714] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#D9A441]'
+                            : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
+                        }`}
+                      >
+                        <p className="font-bold">{c.label}</p>
+                        <p className="text-[9px] opacity-70">{c.time}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
-                  onClick={() => startQuiz(true, selectedTag)}
+                  onClick={() => startQuiz(true, selectedTag, true)}
                   disabled={filteredTerms.length === 0}
                   className="mt-5 w-full border-2 border-[#1A1714] bg-[#1A1714] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#332f2b]"
                 >
-                  ⚡ 【{selectedTag}】を集中特訓する（{filteredTerms.length}件）
+                  ⚡ 【{selectedTag}】を{sessionLimit > 0 ? `${sessionLimit}問` : '全問'}特訓する
                 </button>
               </div>
             ) : due.length > 0 ? (
               // 今日の復習カード
               <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
-                <p className="text-sm font-bold text-[#1A1714]/70">今日復習する用語</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-[#1A1714]/70">今日復習する用語</p>
+                  <span className="font-mono text-xs text-[#B83227] font-bold">全 {due.length} 件が待機中</span>
+                </div>
                 <p className="font-serif text-6xl font-bold leading-none text-[#1A1714]">
                   {due.length}
                   <span className="ml-2 font-sans text-base font-normal">件</span>
                 </p>
+
+                {/* 問題数コース選択 */}
+                <div className="mt-4 border-t border-[#1A1714]/15 pt-3">
+                  <p className="text-[11px] font-bold text-[#1A1714]/70 mb-1.5">今日のペースを選ぶ</p>
+                  <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
+                    {[
+                      { count: 3, label: '3問', time: '1分' },
+                      { count: 5, label: '5問', time: '3分' },
+                      { count: 10, label: '10問', time: '5分' },
+                      { count: 0, label: '全問', time: '無制限' },
+                    ].map((c) => (
+                      <button
+                        key={c.count}
+                        onClick={() => setSessionLimit(c.count)}
+                        className={`border-2 p-1.5 text-center transition-all ${
+                          sessionLimit === c.count
+                            ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#1A1714]'
+                            : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
+                        }`}
+                      >
+                        <p className="font-bold">{c.label}</p>
+                        <p className="text-[9px] opacity-70">{c.time}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
-                  onClick={() => startQuiz()}
+                  onClick={() => startQuiz(false, undefined, true)}
                   className="mt-5 w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#9c2a20]"
                 >
-                  今日の復習をはじめる
+                  ⚡ {sessionLimit > 0 ? `サクッと ${sessionLimit} 問復習する` : '全問チャレンジする'}
                 </button>
               </div>
             ) : (
@@ -533,10 +604,10 @@ export default function Home() {
 
                 <div className="mt-5 flex gap-2">
                   <button
-                    onClick={() => startQuiz(true)}
+                    onClick={() => startQuiz(true, undefined, true)}
                     className="flex-1 border-2 border-[#1A1714] bg-white px-3 py-2.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] transition-colors"
                   >
-                    ⚡ 先取り復習する
+                    ⚡ 先取り復習する ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
                   </button>
                   <button
                     onClick={() => setView('add')}
@@ -631,6 +702,26 @@ export default function Home() {
         {/* 2. 出題・回答画面 (View === 'quiz') */}
         {view === 'quiz' && current && (
           <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
+            {/* セッション進行度バー */}
+            {sessionLimit > 0 && (
+              <div className="mb-4 border-b border-[#1A1714]/15 pb-3">
+                <div className="flex items-center justify-between text-xs font-mono font-bold">
+                  <span className="text-[#B83227]">
+                    第 {sessionIndex} / {sessionLimit} 問
+                  </span>
+                  <span className="text-[#1A1714]/60">
+                    残り {Math.max(0, sessionLimit - sessionIndex + 1)} 問
+                  </span>
+                </div>
+                <div className="mt-1.5 h-2 w-full border border-[#1A1714]/30 bg-white/70">
+                  <div
+                    className="h-full bg-[#B83227] transition-all"
+                    style={{ width: `${Math.min(100, (sessionIndex / sessionLimit) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">お題</p>
               <span className="border border-[#1A1714] bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-[#1A1714]">
@@ -701,6 +792,26 @@ export default function Home() {
         {/* 3. 採点結果 & 聞き返しチャット画面 (View === 'result') */}
         {view === 'result' && result && current && (
           <div className="space-y-4">
+            {/* セッション進行度バー */}
+            {sessionLimit > 0 && (
+              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] px-4 py-2.5 shadow-[3px_3px_0_0_#1A1714]">
+                <div className="flex items-center justify-between text-xs font-mono font-bold">
+                  <span className="text-[#B83227]">
+                    第 {sessionIndex} / {sessionLimit} 問 完了
+                  </span>
+                  <span className="text-[#1A1714]/60">
+                    今回のスコア: {result.score}点
+                  </span>
+                </div>
+                <div className="mt-1.5 h-2 w-full border border-[#1A1714]/30 bg-white/70">
+                  <div
+                    className="h-full bg-[#B83227] transition-all"
+                    style={{ width: `${Math.min(100, (sessionIndex / sessionLimit) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* ツッコミ & 印鑑判子 */}
             <div className="relative border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
               <div className="absolute right-4 top-4">
@@ -856,13 +967,21 @@ export default function Home() {
 
             {/* ナビゲーションボタン */}
             <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => startQuiz(false, selectedTag)}
-                disabled={due.length === 0 && selectedTag === 'all'}
-                className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20] disabled:bg-[#1A1714]/20 disabled:text-[#1A1714]/50"
-              >
-                {selectedTag !== 'all' ? `次のお題へ（${selectedTag}）` : due.length === 0 ? '今日の復習完了！' : '次のお題へ'}
-              </button>
+              {sessionLimit > 0 && sessionIndex >= sessionLimit ? (
+                <button
+                  onClick={() => setView('session_summary')}
+                  className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20] shadow-[3px_3px_0_0_#1A1714]"
+                >
+                  🎉 {sessionLimit}問セッション完了！結果を見る
+                </button>
+              ) : (
+                <button
+                  onClick={() => startQuiz(false, selectedTag, false)}
+                  className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20]"
+                >
+                  次のお題へ（{sessionIndex + 1}/{sessionLimit > 0 ? sessionLimit : '∞'}問）
+                </button>
+              )}
               <button
                 onClick={() => setView('home')}
                 className="border-2 border-[#1A1714] bg-[#F7F1E3] px-4 py-3 font-bold hover:bg-[#1A1714]/5"
@@ -873,7 +992,75 @@ export default function Home() {
           </div>
         )}
 
-        {/* 4. 用語追加画面 (View === 'add') */}
+        {/* 4. セッション完了サマリー画面 (View === 'session_summary') */}
+        {view === 'session_summary' && (
+          <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714] space-y-5">
+            <div className="text-center">
+              <span className="text-5xl">🏆</span>
+              <h2 className="mt-2 font-serif text-2xl font-bold text-[#1A1714]">
+                {sessionLimit}問セッション達成！
+              </h2>
+              <p className="font-mono text-xs font-bold text-[#8a6300]">
+                SESSION COMPLETE
+              </p>
+            </div>
+
+            {/* スコアまとめカード */}
+            <div className="border-2 border-[#1A1714] bg-white p-5 text-center">
+              <p className="text-xs font-bold text-[#1A1714]/60">今回の平均スコア</p>
+              <p className="font-serif text-5xl font-bold text-[#B83227] mt-1">
+                {sessionScores.length > 0
+                  ? Math.round(sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length)
+                  : 0}
+                <span className="text-base font-normal text-[#1A1714] ml-1">点</span>
+              </p>
+              <div className="mt-3 flex justify-center gap-2 font-mono text-xs">
+                {sessionScores.map((score, i) => (
+                  <span
+                    key={i}
+                    className={`border px-2 py-1 font-bold ${
+                      score >= 80
+                        ? 'border-[#B83227] bg-[#B83227]/10 text-[#B83227]'
+                        : 'border-[#1A1714]/30 bg-[#1A1714]/5 text-[#1A1714]'
+                    }`}
+                  >
+                    問{i + 1}: {score}点
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* コーチの激励 */}
+            <div className="border-l-4 border-[#D9A441] bg-[#D9A441]/15 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{COACH_LIST.find((c) => c.id === coach)?.icon}</span>
+                <p className="font-serif text-sm font-bold text-[#1A1714]">
+                  {COACH_LIST.find((c) => c.id === coach)?.name}
+                </p>
+              </div>
+              <p className="mt-1 text-sm font-bold text-[#1A1714]/90">
+                「ええペースや！こうやって{sessionLimit}問ずつ隙間時間に回すのが一番記憶に残るんやで！この調子でいこ！」
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => startQuiz(false, selectedTag, true)}
+                className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20] transition-colors"
+              >
+                ⚡ もう1セットやる（+{sessionLimit}問）
+              </button>
+              <button
+                onClick={() => setView('home')}
+                className="flex-1 border-2 border-[#1A1714] bg-[#F7F1E3] px-4 py-3 font-bold hover:bg-[#1A1714]/5 transition-colors"
+              >
+                ホームへ戻る
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 5. 用語追加画面 (View === 'add') */}
         {view === 'add' && (
           <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
             <h2 className="font-serif text-2xl font-bold">用語を追加する</h2>
