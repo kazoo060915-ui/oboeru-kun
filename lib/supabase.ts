@@ -12,15 +12,39 @@ export interface Term {
   created_at?: string;
 }
 
+// AI Driven School の各回講義テーマ定義
+export const LECTURE_TITLES: Record<string, string> = {
+  '1': '第1回 (ワールドツアー)',
+  '2': '第2回 (動かす側の壁)',
+  '3': '第3回 (報告自動化)',
+  '4': '第4回 (ツール選定)',
+  '5': '第5回 (画面・UI設計)',
+  '6': '第6回 (アプリ公開・中身)',
+  '7': '第7回 (ツールに記憶/DB)',
+  '8': '第8回 (自分の武器作成)',
+  '9': '第9回 (ライティング)',
+  '10': '第10回 (ストーリー制作)',
+  '11': '第11回 (AIの裏側)',
+};
+
 // 用語の note や tag から代表的な講義・分野タグをスマートに抽出する関数
 export function getTermTag(t: Term): string {
-  if (t.tag && t.tag.trim()) return t.tag.trim();
+  if (t.tag && t.tag.trim()) {
+    const rawTag = t.tag.trim();
+    const m = rawTag.match(/第\s*(\d+)\s*回/);
+    if (m && LECTURE_TITLES[m[1]]) {
+      return LECTURE_TITLES[m[1]];
+    }
+    return rawTag;
+  }
+
   const text = (t.note || '') + ' ' + (t.term || '');
   
   // 第X回講義 または 第X回
   const matchLecture = text.match(/第\s*(\d+)\s*回(?:講義)?/);
   if (matchLecture) {
-    return `第${matchLecture[1]}回講義`;
+    const num = matchLecture[1];
+    return LECTURE_TITLES[num] || `第${num}回講義`;
   }
 
   // キーワードパターン

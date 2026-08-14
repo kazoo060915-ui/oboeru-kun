@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback } from 'react';
-import { Term } from '@/lib/supabase';
+import { Term, LECTURE_TITLES } from '@/lib/supabase';
 
 interface ExtractedTerm {
   term: string;
@@ -16,9 +16,12 @@ interface FileImporterProps {
 
 function extractTagFromFileName(name: string): string {
   const match = name.match(/第\s*(\d+)\s*回(?:講義)?/);
-  if (match) return `第${match[1]}回講義`;
+  if (match) {
+    const num = match[1];
+    return LECTURE_TITLES[num] || `第${num}回講義`;
+  }
   const cleanName = name.replace(/\.[^/.]+$/, '').replace(/[_\-]/g, ' ').trim();
-  return cleanName.slice(0, 12);
+  return cleanName.slice(0, 15);
 }
 
 export default function FileImporter({ onImported, onClose }: FileImporterProps) {
