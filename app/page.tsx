@@ -47,6 +47,9 @@ export default function Home() {
   // 分野・講義回フィルター ('all' | 'due' | タグ名)
   const [selectedTag, setSelectedTag] = useState<string>('all');
 
+  // 用語一覧の検索フィルター
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
   // 聞き返しチャット用
   const [chat, setChat] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -127,13 +130,27 @@ export default function Home() {
       .sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }));
   }, [terms, today]);
 
-  // 選択中タグでフィルタされた用語一覧
+  // 選択中タグ & 検索語でフィルタされた用語一覧
   const filteredTerms = React.useMemo(() => {
     if (!terms) return [];
-    if (selectedTag === 'all') return terms;
-    if (selectedTag === 'due') return due;
-    return terms.filter((t) => getTermTag(t) === selectedTag);
-  }, [terms, selectedTag, due]);
+    let list = terms;
+    if (selectedTag === 'due') {
+      list = due;
+    } else if (selectedTag !== 'all') {
+      list = terms.filter((t) => getTermTag(t) === selectedTag);
+    }
+
+    if (searchTerm.trim()) {
+      const q = searchTerm.trim().toLowerCase();
+      list = list.filter(
+        (t) =>
+          t.term.toLowerCase().includes(q) ||
+          (t.note && t.note.toLowerCase().includes(q)) ||
+          getTermTag(t).toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [terms, selectedTag, due, searchTerm]);
 
   // 選択中タグでフィルタされた本日復習対象
   const filteredDue = React.useMemo(() => {
@@ -318,6 +335,24 @@ export default function Home() {
         setView('session_summary');
       } else {
         startQuiz(false, selectedTag, false);
+      }
+    } catch {
+      setError('用語の削除に失敗しました。');
+    }
+  };
+
+  // 一覧から特定の用語を手動で即座に削除する関数
+  const handleDeleteTermById = async (termToDelete: Term) => {
+    if (!window.confirm(`用語「${termToDelete.term}」を削除してもよろしいですか？\n※復習履歴も削除されます。`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/terms?id=${encodeURIComponent(termToDelete.id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok && terms) {
+        setTerms(terms.filter((t) => t.id !== termToDelete.id));
       }
     } catch {
       setError('用語の削除に失敗しました。');
@@ -673,10 +708,33 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+
+              {/* 用語のインクリメンタル検索バー */}
+              <div className="border-b border-[#1A1714]/15 bg-white/60 px-4 py-2">
+                <div className="relative flex items-center">
+                  <span className="absolute left-2.5 text-xs text-[#1A1714]/40">🔍</span>
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="登録用語やメモを検索して絞り込み..."
+                    className="w-full border border-[#1A1714]/30 bg-white py-1.5 pl-8 pr-7 text-xs focus:border-[#B83227] focus:outline-none"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2 text-xs text-[#1A1714]/40 hover:text-[#1A1714]"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <ul className="divide-y divide-[#1A1714]/15">
                 {filteredTerms.length === 0 ? (
                   <li className="px-4 py-8 text-center text-xs text-[#1A1714]/50">
-                    該当する用語はありません。
+                    {searchTerm ? `「${searchTerm}」に一致する用語はありません。` : '該当する用語はありません。'}
                   </li>
                 ) : (
                   filteredTerms.map((t) => {
@@ -695,6 +753,13 @@ export default function Home() {
                               className="text-xs text-[#1A1714]/40 hover:text-[#B83227] transition-colors"
                             >
                               ✏️
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTermById(t)}
+                              title="この用語を手動で削除"
+                              className="text-xs text-[#1A1714]/40 hover:text-[#B83227] transition-colors"
+                            >
+                              🗑️
                             </button>
                           </div>
                           {t.note && (
