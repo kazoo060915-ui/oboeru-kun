@@ -9,6 +9,7 @@ create table if not exists public.terms (
   user_id text not null default 'default_user',
   term text not null,
   note text default '',
+  tag text default '',
   level integer not null default 0 check (level >= 0 and level <= 4),
   next_review_at date not null default current_date,
   last_score integer,
@@ -39,4 +40,15 @@ create table if not exists public.user_settings (
 
 -- Index for fast review querying
 create index if not exists idx_terms_next_review on public.terms(next_review_at);
+create index if not exists idx_terms_tag on public.terms(tag);
 create index if not exists idx_reviews_term_id on public.reviews(term_id);
+
+-- ──────────────────────────────────────────
+-- Row Level Security
+-- ポリシーを1つも作らない = anon / authenticated からは全拒否。
+-- サーバー（service_role キー）だけが RLS をバイパスする。
+-- ブラウザに配られる anon キーで DB を直接操作されるのを防ぐ要。
+-- ──────────────────────────────────────────
+alter table public.terms         enable row level security;
+alter table public.reviews       enable row level security;
+alter table public.user_settings enable row level security;

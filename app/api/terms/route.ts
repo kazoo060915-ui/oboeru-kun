@@ -1,18 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured, Term } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth';
+import { todayStr } from '@/lib/date';
 
-const DEFAULT_SEED: Omit<Term, 'id'>[] = [
-  { user_id: 'default_user', term: 'useState', note: 'kazu-dashboardのタスクリストで使った', level: 0, next_review_at: new Date().toISOString().slice(0, 10), last_score: null },
-  { user_id: 'default_user', term: 'useEffect', note: '週間カレンダーの初期読み込みで使った', level: 0, next_review_at: new Date().toISOString().slice(0, 10), last_score: null },
-  { user_id: 'default_user', term: 'props', note: 'Reactコンポーネント間のデータ受け渡し', level: 0, next_review_at: new Date().toISOString().slice(0, 10), last_score: null },
-  { user_id: 'default_user', term: 'SSR / SSG / ISR', note: 'Next.jsのレンダリング戦略。第9回講義', level: 0, next_review_at: new Date().toISOString().slice(0, 10), last_score: null },
-  { user_id: 'default_user', term: 'JSX', note: 'HTMLっぽく書けるやつ', level: 0, next_review_at: new Date().toISOString().slice(0, 10), last_score: null },
-  { user_id: 'default_user', term: 'commit / push', note: 'Git。ローカルとGitHubの関係がややこしい', level: 0, next_review_at: new Date().toISOString().slice(0, 10), last_score: null },
-  { user_id: 'default_user', term: 'function calling', note: 'AIエージェント回。LLMが道具を呼ぶ仕組み', level: 0, next_review_at: new Date().toISOString().slice(0, 10), last_score: null },
-  { user_id: 'default_user', term: 'コンテキストウィンドウ', note: 'AIが一度に読める量', level: 0, next_review_at: new Date().toISOString().slice(0, 10), last_score: null },
+// 関数にしているのは、モジュール読み込み時ではなく呼び出し時の日付を使うため。
+// 定数のままだとサーバーが起動しっぱなしの間ずっと起動日が入り続ける。
+const buildDefaultSeed = (): Omit<Term, 'id'>[] => [
+  { user_id: 'default_user', term: 'useState', note: 'kazu-dashboardのタスクリストで使った', level: 0, next_review_at: todayStr(), last_score: null },
+  { user_id: 'default_user', term: 'useEffect', note: '週間カレンダーの初期読み込みで使った', level: 0, next_review_at: todayStr(), last_score: null },
+  { user_id: 'default_user', term: 'props', note: 'Reactコンポーネント間のデータ受け渡し', level: 0, next_review_at: todayStr(), last_score: null },
+  { user_id: 'default_user', term: 'SSR / SSG / ISR', note: 'Next.jsのレンダリング戦略。第9回講義', level: 0, next_review_at: todayStr(), last_score: null },
+  { user_id: 'default_user', term: 'JSX', note: 'HTMLっぽく書けるやつ', level: 0, next_review_at: todayStr(), last_score: null },
+  { user_id: 'default_user', term: 'commit / push', note: 'Git。ローカルとGitHubの関係がややこしい', level: 0, next_review_at: todayStr(), last_score: null },
+  { user_id: 'default_user', term: 'function calling', note: 'AIエージェント回。LLMが道具を呼ぶ仕組み', level: 0, next_review_at: todayStr(), last_score: null },
+  { user_id: 'default_user', term: 'コンテキストウィンドウ', note: 'AIが一度に読める量', level: 0, next_review_at: todayStr(), last_score: null },
 ];
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase
       .from('terms')
@@ -21,14 +28,14 @@ export async function GET() {
 
     if (error) {
       console.error('Supabase fetch terms error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: '用語の読み込みに失敗しました。' }, { status: 500 });
     }
 
     // 初回テーブル作成直後でデータが0件の場合、初期シードを自動登録
     if (!data || data.length === 0) {
       const { data: seeded, error: seedError } = await supabase
         .from('terms')
-        .insert(DEFAULT_SEED)
+        .insert(buildDefaultSeed())
         .select();
 
       if (!seedError && seeded) {
@@ -40,12 +47,15 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    terms: DEFAULT_SEED.map((t, i) => ({ ...t, id: `t${i}` })),
+    terms: buildDefaultSeed().map((t, i) => ({ ...t, id: `t${i}` })),
     isSupabase: false,
   });
 }
 
 export async function POST(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   try {
     const { term, note, tag } = await req.json();
     if (!term || !term.trim()) {
@@ -58,7 +68,7 @@ export async function POST(req: NextRequest) {
       note: (note || '').trim(),
       tag: (tag || '').trim(),
       level: 0,
-      next_review_at: new Date().toISOString().slice(0, 10),
+      next_review_at: todayStr(),
       last_score: null,
     };
 
@@ -70,18 +80,12 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (error) {
-        // もしtagカラムがDBに未作成でも、tagを除外して安全に再試行
-        const { tag: _, ...fallbackData } = newTermData;
-        const { data: retryData, error: retryError } = await supabase
-          .from('terms')
-          .insert(fallbackData)
-          .select()
-          .single();
-
-        if (retryError) {
-          return NextResponse.json({ error: retryError.message }, { status: 500 });
-        }
-        return NextResponse.json({ term: retryData });
+        // 以前はここで「tagカラムが無いのだろう」と決めつけて tag を外して
+        // 再試行し、成功扱いにしていた。実際には制約違反もネットワークエラーも
+        // 同じ経路に落ちるため、真の原因が握り潰されていた（そして tag は
+        // DB に列が無かった間、100% 黙って捨てられていた）。
+        console.error('Supabase insert term error:', error);
+        return NextResponse.json({ error: '用語の追加に失敗しました。' }, { status: 500 });
       }
 
       return NextResponse.json({ term: data });
@@ -93,12 +97,18 @@ export async function POST(req: NextRequest) {
     };
 
     return NextResponse.json({ term: createdTerm });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || 'Failed to add term' }, { status: 500 });
+  } catch (error) {
+    // 内部エラーの詳細はサーバーログにだけ残す（クライアントへ返すと
+    // DB のテーブル名やドライバの内部事情が漏れる）
+    console.error('POST /api/terms failed:', error);
+    return NextResponse.json({ error: '用語の追加に失敗しました。' }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   try {
     const { id, term, note, tag, level, next_review_at } = await req.json();
     if (!id) {
@@ -121,31 +131,24 @@ export async function PATCH(req: NextRequest) {
         .single();
 
       if (error) {
-        // tagカラムがない場合のエラー回避
-        const { tag: _, ...safeUpdates } = updates;
-        const { data: safeData, error: safeError } = await supabase
-          .from('terms')
-          .update(safeUpdates)
-          .eq('id', id)
-          .select()
-          .single();
-
-        if (safeError) {
-          return NextResponse.json({ error: safeError.message }, { status: 500 });
-        }
-        return NextResponse.json({ term: safeData });
+        console.error('Supabase update term error:', error);
+        return NextResponse.json({ error: '用語の更新に失敗しました。' }, { status: 500 });
       }
 
       return NextResponse.json({ term: data });
     }
 
     return NextResponse.json({ term: { id, ...updates } });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || 'Failed to update term' }, { status: 500 });
+  } catch (error) {
+    console.error('PATCH /api/terms failed:', error);
+    return NextResponse.json({ error: '用語の更新に失敗しました。' }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   try {
     const { searchParams } = new URL(req.url);
     let id = searchParams.get('id');
@@ -173,13 +176,15 @@ export async function DELETE(req: NextRequest) {
         .eq('id', id);
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('Supabase delete term error:', error);
+        return NextResponse.json({ error: '用語の削除に失敗しました。' }, { status: 500 });
       }
     }
 
     return NextResponse.json({ success: true, id });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || 'Failed to delete term' }, { status: 500 });
+  } catch (error) {
+    console.error('DELETE /api/terms failed:', error);
+    return NextResponse.json({ error: '用語の削除に失敗しました。' }, { status: 500 });
   }
 }
 

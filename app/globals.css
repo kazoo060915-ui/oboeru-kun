@@ -16,6 +16,15 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ピンチズームを禁止していた（WCAG 1.4.4 違反）のを解除したため、
+   代わりにこちらで iOS の自動ズームを防ぐ。iOS Safari は
+   フォーカスした入力欄が 16px 未満だとページごと拡大する。 */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
 
 @keyframes thump {
   0% {

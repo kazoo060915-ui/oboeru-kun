@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { askCoachChat, ChatMessage, CoachType } from '@/lib/anthropic';
+import { askCoachChat, ChatMessage } from '@/lib/anthropic';
+import { normalizeCoach } from '@/lib/coach';
+import { requireAuth } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   try {
     const { term, note, answer, correct, mission, chatHistory, coach = 'osaka' } = await req.json();
 
@@ -16,7 +21,7 @@ export async function POST(req: NextRequest) {
       correct || '',
       mission || '',
       (chatHistory as ChatMessage[]) || [],
-      coach as CoachType
+      normalizeCoach(coach)
     );
 
     return NextResponse.json({ reply });

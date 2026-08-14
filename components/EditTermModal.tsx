@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Term } from '@/lib/supabase';
+import { Term } from '@/lib/types';
+import { todayStr } from '@/lib/date';
 
 interface EditTermModalProps {
   term: Term | null;
@@ -33,7 +34,7 @@ export default function EditTermModal({
       setNoteText(term.note || '');
       setTagText(term.tag || '');
       setLevel(term.level || 0);
-      setNextReviewAt(term.next_review_at || new Date().toISOString().slice(0, 10));
+      setNextReviewAt(term.next_review_at || todayStr());
       setError('');
     }
   }, [term]);

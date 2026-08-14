@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { gradeAnswer, CoachType } from '@/lib/anthropic';
+import { gradeAnswer } from '@/lib/anthropic';
+import { normalizeCoach } from '@/lib/coach';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-
-const INTERVALS = [1, 3, 7, 14, 30];
-
-const todayStr = () => new Date().toISOString().slice(0, 10);
-const addDaysStr = (n: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
-};
+import { requireAuth } from '@/lib/auth';
+import { addDaysStr } from '@/lib/date';
+import { INTERVALS } from '@/lib/constants';
 
 export async function POST(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   try {
     const { term, note, answer, termId, currentLevel = 0, coach = 'osaka' } = await req.json();
 
@@ -20,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Anthropic API で採点
-    const result = await gradeAnswer(term, note || '', answer || '', coach as CoachType);
+    const result = await gradeAnswer(term, note || '', answer || '', normalizeCoach(coach));
 
     // 2. レベルおよび次回復習日の計算
     const score = result.score;

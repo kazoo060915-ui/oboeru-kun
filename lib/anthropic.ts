@@ -1,4 +1,10 @@
+import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
+import type { CoachType } from './coach';
+
+// コーチのメタデータ（アイコン・名前）はクライアントも使うので lib/coach.ts に。
+// このファイルは人格プロンプト本文を持つのでサーバー専用。
+export type { CoachType } from './coach';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -6,19 +12,6 @@ export const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
 
 // アプリ裏側で叩くAnthropic APIモデル。最新爆速の Claude Haiku 4.5 を指定（1〜2秒で即レス）
 const MODEL_ID = 'claude-haiku-4-5-20251001';
-
-// ──────────────────────────────────────────
-// コーチキャラクター定義
-// ──────────────────────────────────────────
-export type CoachType = 'osaka' | 'praise' | 'mentor' | 'hotblood' | 'sage';
-
-export const COACH_LIST: { id: CoachType; icon: string; name: string; description: string }[] = [
-  { id: 'osaka',    icon: '👦', name: '大阪の兄ちゃん',   description: '笑いながら背中を押すツッコミ系' },
-  { id: 'praise',   icon: '🌸', name: '褒め上手な先輩',   description: '全肯定で優しく応援してくれる' },
-  { id: 'mentor',   icon: '👔', name: 'スマートメンター', description: 'ロジカル＆知的な標準語解説' },
-  { id: 'hotblood', icon: '🔥', name: '熱血コーチ',       description: 'ガツンと喝！燃え上がるやる気' },
-  { id: 'sage',     icon: '🧙', name: '知識の賢者',       description: '穏やかで深みのある哲学的解説' },
-];
 
 function getCoachPersona(coach: CoachType): string {
   switch (coach) {

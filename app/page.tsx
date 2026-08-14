@@ -8,17 +8,10 @@ import AuthModal from '@/components/AuthModal';
 import NotificationModal from '@/components/NotificationModal';
 import FileImporter from '@/components/FileImporter';
 import EditTermModal from '@/components/EditTermModal';
-import { Term, getTermTag } from '@/lib/supabase';
-import { CoachType, COACH_LIST } from '@/lib/anthropic';
-
-const INTERVALS = [1, 3, 7, 14, 30];
-
-const todayStr = () => new Date().toISOString().slice(0, 10);
-const addDaysStr = (n: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
-};
+import { Term, getTermTag } from '@/lib/types';
+import { CoachType, COACH_LIST } from '@/lib/coach';
+import { todayStr } from '@/lib/date';
+import { INTERVALS } from '@/lib/constants';
 
 export default function Home() {
   const [terms, setTerms] = useState<Term[] | null>(null);
@@ -68,10 +61,9 @@ export default function Home() {
   const [showImporter, setShowImporter] = useState(false);
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
 
-  // 認証チェック & 用語一覧の読み込み
+  // 認証ステータスチェック
   useEffect(() => {
-    async function init() {
-      // 1. 認証ステータスチェック
+    async function checkAuth() {
       try {
         const authRes = await fetch('/api/auth');
         const authData = await authRes.json();
@@ -79,8 +71,19 @@ export default function Home() {
       } catch {
         setIsAuthenticated(true); // エラー時はスキップ
       }
+    }
+    checkAuth();
+  }, []);
 
-      // 2. 用語一覧取得
+  // 用語一覧の読み込み。/api/terms は未認証だと401を返すため、
+  // 認証確認後（isAuthenticated === true）にしか呼ばない。
+  // 以前はここを認証と無関係に無条件で呼んでいたため、未認証時は
+  // terms が永遠に null のままとなり、ログインモーダルにすら
+  // 到達できずに「読み込み中…」で固まっていた。
+  useEffect(() => {
+    if (isAuthenticated !== true) return;
+
+    async function loadTerms() {
       try {
         const res = await fetch('/api/terms');
         const data = await res.json();
@@ -92,8 +95,8 @@ export default function Home() {
         setError('用語の読み込みに失敗しました。');
       }
     }
-    init();
-  }, []);
+    loadTerms();
+  }, [isAuthenticated]);
 
   // coach を localStorage から復元
   useEffect(() => {
@@ -303,15 +306,22 @@ export default function Home() {
       });
       const data = await res.json();
 
-      if (data.term && terms) {
-        setTerms([data.term, ...terms]);
+      // res.ok を見ずに入力をクリアしていたため、保存に失敗しても
+      // 入力が消えてホームに戻り、エラーも出ないままだった（＝書いた内容が消滅）。
+      // 失敗時は入力を残して、その場に留まる。
+      if (!res.ok || !data.term) {
+        setError(data.error || '用語の追加に失敗しました。もう一度試してください。');
+        return;
       }
+
+      setTerms((prev) => (prev ? [data.term, ...prev] : [data.term]));
       setNewTerm('');
       setNewNote('');
       setNewTag('');
+      setError('');
       setView('home');
     } catch {
-      setError('用語の追加に失敗しました。');
+      setError('通信エラーで用語を追加できませんでした。もう一度試してください。');
     }
   };
 
@@ -326,9 +336,16 @@ export default function Home() {
       const res = await fetch(`/api/terms?id=${encodeURIComponent(current.id)}`, {
         method: 'DELETE',
       });
-      if (res.ok && terms) {
-        setTerms(terms.filter((t) => t.id !== current.id));
+
+      // 失敗時に何もせず黙って進んでいたため、ユーザーには
+      // 「削除ボタンが効かない」としか見えなかった。
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || '用語の削除に失敗しました。');
+        return;
       }
+
+      setTerms((prev) => (prev ? prev.filter((t) => t.id !== current.id) : prev));
 
       // セッション中なら次の問題へ、またはセッション完了ならホームへ
       if (sessionLimit > 0 && sessionIndex >= sessionLimit) {
@@ -351,11 +368,16 @@ export default function Home() {
       const res = await fetch(`/api/terms?id=${encodeURIComponent(termToDelete.id)}`, {
         method: 'DELETE',
       });
-      if (res.ok && terms) {
-        setTerms(terms.filter((t) => t.id !== termToDelete.id));
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || '用語の削除に失敗しました。');
+        return;
       }
+
+      setTerms((prev) => (prev ? prev.filter((t) => t.id !== termToDelete.id) : prev));
     } catch {
-      setError('用語の削除に失敗しました。');
+      setError('通信エラーで用語を削除できませんでした。');
     }
   };
 
@@ -380,7 +402,18 @@ export default function Home() {
     }
   };
 
-  if (terms === null) {
+  // 未認証ならログイン画面のみ表示する。terms は認証後にしか
+  // 取得できない（=いつまでも null）ため、この判定を terms === null の
+  // 早期returnより先に置かないとログインモーダルへ到達できない。
+  if (isAuthenticated === false) {
+    return (
+      <div className="min-h-screen bg-[#D9A441] font-sans text-[#1A1714]">
+        <AuthModal onSuccess={() => setIsAuthenticated(true)} />
+      </div>
+    );
+  }
+
+  if (isAuthenticated !== true || terms === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#D9A441] font-sans text-[#1A1714]">
         <p className="font-serif text-lg font-bold">読み込み中…</p>
@@ -390,11 +423,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#D9A441] px-4 py-8 font-sans text-[#1A1714]">
-      {/* 簡易認証モーダル */}
-      {isAuthenticated === false && (
-        <AuthModal onSuccess={() => setIsAuthenticated(true)} />
-      )}
-
       {/* 通知パイプライン設定モーダル */}
       {showSettings && (
         <NotificationModal onClose={() => setShowSettings(false)} />
@@ -870,22 +898,33 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mt-5 flex gap-2">
-              <button
-                onClick={() => grade()}
-                disabled={loading || !answer.trim()}
-                className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20] disabled:bg-[#1A1714]/20 disabled:text-[#1A1714]/50"
-              >
-                {loading ? '採点中…' : '答える'}
-              </button>
-              <button
-                onClick={() => grade('(わからん)')}
-                disabled={loading}
-                className="border-2 border-[#1A1714] px-4 py-3 font-bold hover:bg-[#1A1714]/5"
-              >
-                わからん
-              </button>
-            </div>
+          </div>
+        )}
+
+        {/* 送信ボタンをカード外・画面下部に固定。
+            スマホでtextareaにフォーカスするとソフトキーボードが出るが、
+            quiz画面はページ全体の丈がviewportとほぼ同じでスクロール余地が
+            数十pxしかなく、キーボード分の高さ（実測300px超）を差し引くと
+            通常配置のボタンは可視領域の外に出て押せなくなっていた。 */}
+        {view === 'quiz' && current && (
+          <div
+            className="sticky bottom-0 z-10 mt-3 flex gap-2 border-t-2 border-[#1A1714] bg-[#D9A441] px-4 py-3"
+            style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+          >
+            <button
+              onClick={() => grade()}
+              disabled={loading || !answer.trim()}
+              className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] shadow-[3px_3px_0_0_#1A1714] hover:bg-[#9c2a20] disabled:bg-[#1A1714]/20 disabled:text-[#1A1714]/50 disabled:shadow-none"
+            >
+              {loading ? '採点中…' : '答える'}
+            </button>
+            <button
+              onClick={() => grade('(わからん)')}
+              disabled={loading}
+              className="border-2 border-[#1A1714] bg-[#F7F1E3] px-4 py-3 font-bold shadow-[3px_3px_0_0_#1A1714] hover:bg-[#1A1714]/5 disabled:opacity-50 disabled:shadow-none"
+            >
+              わからん
+            </button>
           </div>
         )}
 
@@ -914,10 +953,7 @@ export default function Home() {
 
             {/* ツッコミ & 印鑑判子 */}
             <div className="relative border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
-              <div className="absolute right-4 top-4">
-                <Stamp score={result.score} />
-              </div>
-              <div className="flex items-center justify-between pr-20">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">
                     {current.term}
@@ -934,7 +970,13 @@ export default function Home() {
                   🗑️ 復習から外す
                 </button>
               </div>
-              <p className="mt-4 pr-24 font-serif text-xl font-bold leading-relaxed text-[#1A1714]">
+              {/* absolute配置だと、スマホ幅ではpadding-rightで本文の実効幅が
+                  極端に狭くなり、1行あたり数文字しか入らず縦長になっていた。
+                  floatで文章側に回り込ませることで、判子を避けつつ全幅を使う。 */}
+              <div className="float-right ml-3 mb-1">
+                <Stamp score={result.score} />
+              </div>
+              <p className="mt-4 font-serif text-xl font-bold leading-relaxed text-[#1A1714]">
                 「{result.tsukkomi}」
               </p>
             </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractTermsFromText, extractTermsFromImage, ExtractedTerm } from '@/lib/anthropic';
+import { requireAuth } from '@/lib/auth';
 
 // 対応ファイル形式の定義
 const TEXT_EXTENSIONS = ['.txt', '.md', '.vtt', '.srt', '.csv', '.json', '.html', '.htm'];
@@ -19,6 +20,9 @@ const IMAGE_MEDIA_TYPE_MAP: Record<string, ImageMediaType> = {
 };
 
 export async function POST(req: NextRequest) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;

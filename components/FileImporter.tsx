@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback } from 'react';
-import { Term, LECTURE_TITLES } from '@/lib/supabase';
+import { Term, LECTURE_TITLES } from '@/lib/types';
 
 interface ExtractedTerm {
   term: string;

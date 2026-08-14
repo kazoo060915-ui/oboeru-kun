@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { isAuthenticated } from '@/lib/auth';
+import { todayStr } from '@/lib/date';
 
 export async function GET(req: NextRequest) {
   return handleNotification(req);
@@ -11,27 +13,35 @@ export async function POST(req: NextRequest) {
 
 async function handleNotification(req: NextRequest) {
   try {
-    // 簡易セキュリティ: CRON_SECRET の検証
-    const authHeader = req.headers.get('authorization');
-    const secretParam = req.nextUrl.searchParams.get('secret');
+    // 通り道は2つだけ:
+    //   1. Vercel Cron → Authorization: Bearer $CRON_SECRET を自動付与してくる
+    //   2. ログイン済みユーザーの手動テスト送信 → 認証Cookie
+    //
+    // 以前は secret をクエリパラメータでも受けていたが、URLに載る値は
+    // アクセスログ・Referer・ブラウザ履歴に平文で残るため廃止した。
+    // また expectedSecret が未設定だと条件式ごと skip されて
+    // 誰でも通知を送れる状態だったので、未設定は設定ミスとして落とす。
     const expectedSecret = process.env.CRON_SECRET;
+    if (!expectedSecret) {
+      console.error('CRON_SECRET is not configured');
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
 
-    if (
-      expectedSecret &&
-      authHeader !== `Bearer ${expectedSecret}` &&
-      secretParam !== expectedSecret
-    ) {
+    const isCron = req.headers.get('authorization') === `Bearer ${expectedSecret}`;
+    if (!isCron && !isAuthenticated(req)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // 日本時間の「今日」。UTC基準だと Cron 実行時（07:00 JST = 22:00 UTC）に
+    // 前日の日付になり、今日ぶんの用語を丸ごと取りこぼしていた。
+    const today = todayStr();
     let dueTerms: { term: string }[] = [];
 
     if (isSupabaseConfigured && supabase) {
       const { data } = await supabase
         .from('terms')
         .select('term')
-        .lte('next_review_at', todayStr);
+        .lte('next_review_at', today);
       dueTerms = data || [];
     } else {
       dueTerms = [{ term: 'useState' }, { term: 'useEffect' }, { term: 'props' }];

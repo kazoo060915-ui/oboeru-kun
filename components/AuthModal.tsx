@@ -57,7 +57,7 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div>
             <label className="block text-xs font-bold text-[#1A1714]/80">
-              パスコード (デフォルト: oboeru2026)
+              パスコード
             </label>
             <input
               type="password"
