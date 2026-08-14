@@ -6,11 +6,19 @@ import { Term } from '@/lib/supabase';
 interface ExtractedTerm {
   term: string;
   note: string;
+  tag?: string;
 }
 
 interface FileImporterProps {
   onImported: (terms: Term[]) => void;
   onClose: () => void;
+}
+
+function extractTagFromFileName(name: string): string {
+  const match = name.match(/第\s*(\d+)\s*回(?:講義)?/);
+  if (match) return `第${match[1]}回講義`;
+  const cleanName = name.replace(/\.[^/.]+$/, '').replace(/[_\-]/g, ' ').trim();
+  return cleanName.slice(0, 12);
 }
 
 export default function FileImporter({ onImported, onClose }: FileImporterProps) {
@@ -41,6 +49,8 @@ export default function FileImporter({ onImported, onClose }: FileImporterProps)
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      const autoTag = extractTagFromFileName(file.name);
+
       setProgressText(
         `全 ${files.length} ファイル中 ${i + 1} つ目の「${file.name}」を解析中…`
       );
@@ -53,7 +63,12 @@ export default function FileImporter({ onImported, onClose }: FileImporterProps)
         const data = await res.json();
 
         if (res.ok && data.terms && data.terms.length > 0) {
-          allExtracted.push(...data.terms);
+          const termsWithTag = data.terms.map((t: any) => ({
+            term: t.term,
+            note: t.note,
+            tag: autoTag,
+          }));
+          allExtracted.push(...termsWithTag);
           processedSources.push(file.name);
         } else if (!res.ok) {
           errorCount++;
@@ -139,7 +154,7 @@ export default function FileImporter({ onImported, onClose }: FileImporterProps)
           fetch('/api/terms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ term: t.term, note: t.note }),
+            body: JSON.stringify({ term: t.term, note: t.note, tag: t.tag }),
           }).then((r) => r.json())
         )
       );

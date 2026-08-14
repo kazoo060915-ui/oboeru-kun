@@ -20,6 +20,7 @@ export default function EditTermModal({
 }: EditTermModalProps) {
   const [termText, setTermText] = useState('');
   const [noteText, setNoteText] = useState('');
+  const [tagText, setTagText] = useState('');
   const [level, setLevel] = useState(0);
   const [nextReviewAt, setNextReviewAt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,6 +31,7 @@ export default function EditTermModal({
     if (term) {
       setTermText(term.term || '');
       setNoteText(term.note || '');
+      setTagText(term.tag || '');
       setLevel(term.level || 0);
       setNextReviewAt(term.next_review_at || new Date().toISOString().slice(0, 10));
       setError('');
@@ -56,6 +58,7 @@ export default function EditTermModal({
           id: term.id,
           term: termText.trim(),
           note: noteText.trim(),
+          tag: tagText.trim(),
           level,
           next_review_at: nextReviewAt,
         }),
@@ -68,6 +71,7 @@ export default function EditTermModal({
         ...term,
         term: termText.trim(),
         note: noteText.trim(),
+        tag: tagText.trim(),
         level,
         next_review_at: nextReviewAt,
       });
@@ -132,6 +136,19 @@ export default function EditTermModal({
               onChange={(e) => setTermText(e.target.value)}
               className="mt-1 w-full border-2 border-[#1A1714] bg-white p-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#B83227]"
               placeholder="例: useState"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-[#1A1714]">
+              講義回・分野タグ（例: 第1回講義, React, Git 等）
+            </label>
+            <input
+              type="text"
+              value={tagText}
+              onChange={(e) => setTagText(e.target.value)}
+              className="mt-1 w-full border-2 border-[#1A1714] bg-white p-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#B83227]"
+              placeholder="例: 第1回講義 / React / Git"
             />
           </div>
 

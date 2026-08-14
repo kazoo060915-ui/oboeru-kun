@@ -8,7 +8,7 @@ import AuthModal from '@/components/AuthModal';
 import NotificationModal from '@/components/NotificationModal';
 import FileImporter from '@/components/FileImporter';
 import EditTermModal from '@/components/EditTermModal';
-import { Term } from '@/lib/supabase';
+import { Term, getTermTag } from '@/lib/supabase';
 import { CoachType, COACH_LIST } from '@/lib/anthropic';
 
 const INTERVALS = [1, 3, 7, 14, 30];
@@ -37,6 +37,10 @@ export default function Home() {
   const [error, setError] = useState('');
   const [newTerm, setNewTerm] = useState('');
   const [newNote, setNewNote] = useState('');
+  const [newTag, setNewTag] = useState('');
+
+  // 分野・講義回フィルター ('all' | 'due' | タグ名)
+  const [selectedTag, setSelectedTag] = useState<string>('all');
 
   // 聞き返しチャット用
   const [chat, setChat] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
@@ -100,8 +104,55 @@ export default function Home() {
   const today = todayStr();
   const due = (terms || []).filter((t) => t.next_review_at <= today);
 
-  const startQuiz = (forceAll?: boolean) => {
-    const targetPool = forceAll ? (terms || []) : due;
+  // ユニークなタグ一覧と件数を集計
+  const tagStats = React.useMemo(() => {
+    if (!terms) return [];
+    const map = new Map<string, { total: number; due: number }>();
+
+    terms.forEach((t) => {
+      const tag = getTermTag(t);
+      const currentStat = map.get(tag) || { total: 0, due: 0 };
+      currentStat.total += 1;
+      if (t.next_review_at <= today) currentStat.due += 1;
+      map.set(tag, currentStat);
+    });
+
+    return Array.from(map.entries())
+      .map(([name, stat]) => ({ name, ...stat }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }));
+  }, [terms, today]);
+
+  // 選択中タグでフィルタされた用語一覧
+  const filteredTerms = React.useMemo(() => {
+    if (!terms) return [];
+    if (selectedTag === 'all') return terms;
+    if (selectedTag === 'due') return due;
+    return terms.filter((t) => getTermTag(t) === selectedTag);
+  }, [terms, selectedTag, due]);
+
+  // 選択中タグでフィルタされた本日復習対象
+  const filteredDue = React.useMemo(() => {
+    if (selectedTag === 'all') return due;
+    if (selectedTag === 'due') return due;
+    return filteredTerms.filter((t) => t.next_review_at <= today);
+  }, [filteredTerms, selectedTag, due, today]);
+
+  const startQuiz = (forceAll?: boolean, targetTag?: string) => {
+    const tagToUse = targetTag !== undefined ? targetTag : selectedTag;
+    let targetPool: Term[] = [];
+
+    if (tagToUse === 'all') {
+      targetPool = forceAll ? (terms || []) : due;
+    } else if (tagToUse === 'due') {
+      targetPool = due;
+    } else {
+      const tagTerms = (terms || []).filter((t) => getTermTag(t) === tagToUse);
+      targetPool = forceAll || tagTerms.every((t) => t.next_review_at > today)
+        ? tagTerms
+        : tagTerms.filter((t) => t.next_review_at <= today);
+      if (targetPool.length === 0) targetPool = tagTerms;
+    }
+
     if (targetPool.length === 0) return;
     const randomTerm = targetPool[Math.floor(Math.random() * targetPool.length)];
     setCurrent(randomTerm);
@@ -213,7 +264,11 @@ export default function Home() {
       const res = await fetch('/api/terms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ term: newTerm, note: newNote }),
+        body: JSON.stringify({
+          term: newTerm.trim(),
+          note: newNote.trim(),
+          tag: newTag.trim(),
+        }),
       });
       const data = await res.json();
 
@@ -222,6 +277,7 @@ export default function Home() {
       }
       setNewTerm('');
       setNewNote('');
+      setNewTag('');
       setView('home');
     } catch {
       setError('用語の追加に失敗しました。');
@@ -351,8 +407,90 @@ export default function Home() {
         {/* 1. ホーム画面 (View === 'home') */}
         {view === 'home' && (
           <div className="space-y-5">
-            {/* 復習キュー状況カード */}
-            {due.length > 0 ? (
+            {/* 分野・講義フィルタータブバー */}
+            <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-3 shadow-[4px_4px_0_0_#1A1714]">
+              <div className="flex items-center justify-between pb-2">
+                <p className="font-mono text-[10px] font-bold tracking-wider text-[#1A1714]/60">
+                  🏷️ 分野・講義で集中特訓フィルター
+                </p>
+                {selectedTag !== 'all' && (
+                  <button
+                    onClick={() => setSelectedTag('all')}
+                    className="font-mono text-[10px] font-bold text-[#B83227] underline"
+                  >
+                    リセット
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
+                <button
+                  onClick={() => setSelectedTag('all')}
+                  className={`border px-2.5 py-1 font-mono text-xs font-bold transition-all ${
+                    selectedTag === 'all'
+                      ? 'border-[#1A1714] bg-[#1A1714] text-[#F7F1E3] shadow-[2px_2px_0_0_#B83227]'
+                      : 'border-[#1A1714]/40 bg-white text-[#1A1714] hover:border-[#1A1714]'
+                  }`}
+                >
+                  すべて ({terms.length})
+                </button>
+                <button
+                  onClick={() => setSelectedTag('due')}
+                  className={`border px-2.5 py-1 font-mono text-xs font-bold transition-all ${
+                    selectedTag === 'due'
+                      ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] shadow-[2px_2px_0_0_#1A1714]'
+                      : 'border-[#B83227]/50 bg-white text-[#B83227] hover:border-[#B83227]'
+                  }`}
+                >
+                  ⏰ 今日の復習 ({due.length})
+                </button>
+                {tagStats.map((stat) => (
+                  <button
+                    key={stat.name}
+                    onClick={() => setSelectedTag(stat.name)}
+                    className={`flex items-center gap-1 border px-2.5 py-1 text-xs font-bold transition-all ${
+                      selectedTag === stat.name
+                        ? 'border-[#1A1714] bg-[#1A1714] text-[#F7F1E3] shadow-[2px_2px_0_0_#D9A441]'
+                        : 'border-[#1A1714]/30 bg-white text-[#1A1714] hover:border-[#1A1714]'
+                    }`}
+                  >
+                    <span>{stat.name}</span>
+                    <span className="font-mono text-[10px] opacity-70">({stat.total})</span>
+                    {stat.due > 0 && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#B83227]" title={`今日復習 ${stat.due}件`} />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 復習・特訓状況カード */}
+            {selectedTag !== 'all' && selectedTag !== 'due' ? (
+              // 選択された特定分野の集中特訓カード
+              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
+                <div className="flex items-center justify-between">
+                  <span className="inline-block border border-[#1A1714] bg-[#D9A441]/20 px-2 py-0.5 font-mono text-xs font-bold text-[#1A1714]">
+                    🏷️ 集中特訓モード
+                  </span>
+                  <span className="text-xs text-[#1A1714]/60">
+                    今日復習: {filteredDue.length}件 / 全{filteredTerms.length}件
+                  </span>
+                </div>
+                <h3 className="mt-2 font-serif text-2xl font-bold text-[#1A1714]">
+                  {selectedTag}
+                </h3>
+                <p className="mt-1 text-xs text-[#1A1714]/70">
+                  この分野の用語だけを集中して叩き込みます。
+                </p>
+                <button
+                  onClick={() => startQuiz(true, selectedTag)}
+                  disabled={filteredTerms.length === 0}
+                  className="mt-5 w-full border-2 border-[#1A1714] bg-[#1A1714] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#332f2b]"
+                >
+                  ⚡ 【{selectedTag}】を集中特訓する（{filteredTerms.length}件）
+                </button>
+              </div>
+            ) : due.length > 0 ? (
+              // 今日の復習カード
               <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
                 <p className="text-sm font-bold text-[#1A1714]/70">今日復習する用語</p>
                 <p className="font-serif text-6xl font-bold leading-none text-[#1A1714]">
@@ -367,6 +505,7 @@ export default function Home() {
                 </button>
               </div>
             ) : (
+              // 本日のノルマ完了カード
               <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">🎉</span>
@@ -412,7 +551,16 @@ export default function Home() {
             {/* 用語一覧 */}
             <div className="border-2 border-[#1A1714] bg-[#F7F1E3] shadow-[6px_6px_0_0_#1A1714]">
               <div className="flex items-center justify-between border-b-2 border-[#1A1714] px-4 py-3">
-                <h2 className="font-serif text-lg font-bold">覚え中の用語 ({terms.length})</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-serif text-lg font-bold">
+                    覚え中の用語 ({filteredTerms.length})
+                  </h2>
+                  {selectedTag !== 'all' && (
+                    <span className="border border-[#1A1714]/40 bg-white px-2 py-0.5 font-mono text-[10px] font-bold">
+                      {selectedTag === 'due' ? '今日の復習' : selectedTag}
+                    </span>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowImporter(true)}
@@ -429,40 +577,52 @@ export default function Home() {
                 </div>
               </div>
               <ul className="divide-y divide-[#1A1714]/15">
-                {terms.map((t) => (
-                  <li key={t.id} className="flex items-center justify-between px-4 py-3 hover:bg-black/5 transition-colors">
-                    <div className="min-w-0 flex-1 pr-2">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate font-bold text-[#1A1714]">{t.term}</p>
-                        <button
-                          onClick={() => setEditingTerm(t)}
-                          title="用語を編集"
-                          className="text-xs text-[#1A1714]/40 hover:text-[#B83227] transition-colors"
-                        >
-                          ✏️
-                        </button>
-                      </div>
-                      {t.note && (
-                        <p className="truncate text-xs text-[#1A1714]/65">{t.note}</p>
-                      )}
-                    </div>
-                    <div className="ml-3 shrink-0 text-right">
-                      <div className="flex gap-1">
-                        {INTERVALS.map((_, i) => (
-                          <span
-                            key={i}
-                            className={`block h-1.5 w-3 ${
-                              i < t.level ? 'bg-[#B83227]' : 'bg-[#1A1714]/15'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <p className="mt-1 font-mono text-[10px] text-[#1A1714]/60">
-                        {t.next_review_at <= today ? '今日' : t.next_review_at}
-                      </p>
-                    </div>
+                {filteredTerms.length === 0 ? (
+                  <li className="px-4 py-8 text-center text-xs text-[#1A1714]/50">
+                    該当する用語はありません。
                   </li>
-                ))}
+                ) : (
+                  filteredTerms.map((t) => {
+                    const tag = getTermTag(t);
+                    return (
+                      <li key={t.id} className="flex items-center justify-between px-4 py-3 hover:bg-black/5 transition-colors">
+                        <div className="min-w-0 flex-1 pr-2">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate font-bold text-[#1A1714]">{t.term}</p>
+                            <span className="shrink-0 border border-[#1A1714]/30 bg-white px-1.5 py-0.2 font-mono text-[10px] text-[#1A1714]/70">
+                              {tag}
+                            </span>
+                            <button
+                              onClick={() => setEditingTerm(t)}
+                              title="用語を編集"
+                              className="text-xs text-[#1A1714]/40 hover:text-[#B83227] transition-colors"
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                          {t.note && (
+                            <p className="truncate text-xs text-[#1A1714]/65">{t.note}</p>
+                          )}
+                        </div>
+                        <div className="ml-3 shrink-0 text-right">
+                          <div className="flex gap-1">
+                            {INTERVALS.map((_, i) => (
+                              <span
+                                key={i}
+                                className={`block h-1.5 w-3 ${
+                                  i < t.level ? 'bg-[#B83227]' : 'bg-[#1A1714]/15'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <p className="mt-1 font-mono text-[10px] text-[#1A1714]/60">
+                            {t.next_review_at <= today ? '今日' : t.next_review_at}
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })
+                )}
               </ul>
             </div>
           </div>
@@ -471,7 +631,12 @@ export default function Home() {
         {/* 2. 出題・回答画面 (View === 'quiz') */}
         {view === 'quiz' && current && (
           <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
-            <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">お題</p>
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">お題</p>
+              <span className="border border-[#1A1714] bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-[#1A1714]">
+                🏷️ {getTermTag(current)}
+              </span>
+            </div>
             <h2 className="mt-1 font-serif text-3xl font-bold">{current.term}</h2>
             <div className="mt-2 h-1 w-24 bg-[#B83227]" />
             {current.note && (
@@ -541,9 +706,14 @@ export default function Home() {
               <div className="absolute right-4 top-4">
                 <Stamp score={result.score} />
               </div>
-              <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">
-                {current.term}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">
+                  {current.term}
+                </p>
+                <span className="border border-[#1A1714]/30 bg-white px-1.5 py-0.2 font-mono text-[10px] text-[#1A1714]/70">
+                  🏷️ {getTermTag(current)}
+                </span>
+              </div>
               <p className="mt-4 pr-24 font-serif text-xl font-bold leading-relaxed text-[#1A1714]">
                 「{result.tsukkomi}」
               </p>
@@ -687,11 +857,11 @@ export default function Home() {
             {/* ナビゲーションボタン */}
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => startQuiz()}
-                disabled={due.length === 0}
+                onClick={() => startQuiz(false, selectedTag)}
+                disabled={due.length === 0 && selectedTag === 'all'}
                 className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20] disabled:bg-[#1A1714]/20 disabled:text-[#1A1714]/50"
               >
-                {due.length === 0 ? '今日の復習完了！' : '次のお題へ'}
+                {selectedTag !== 'all' ? `次のお題へ（${selectedTag}）` : due.length === 0 ? '今日の復習完了！' : '次のお題へ'}
               </button>
               <button
                 onClick={() => setView('home')}
@@ -716,6 +886,18 @@ export default function Home() {
                   placeholder="例：useRef"
                   className="mt-1 w-full border-2 border-[#1A1714] bg-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B83227]"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-[#1A1714]">
+                  講義回・分野タグ（例: 第1回講義 / React / Git）
+                </label>
+                <input
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  placeholder="例: 第1回講義"
+                  className="mt-1 w-full border-2 border-[#1A1714] bg-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B83227]"
                 />
               </div>
 

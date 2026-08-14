@@ -47,7 +47,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { term, note } = await req.json();
+    const { term, note, tag } = await req.json();
     if (!term || !term.trim()) {
       return NextResponse.json({ error: 'Term is required' }, { status: 400 });
     }
@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
       user_id: 'default_user',
       term: term.trim(),
       note: (note || '').trim(),
+      tag: (tag || '').trim(),
       level: 0,
       next_review_at: new Date().toISOString().slice(0, 10),
       last_score: null,
@@ -69,7 +70,18 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        // もしtagカラムがDBに未作成でも、tagを除外して安全に再試行
+        const { tag: _, ...fallbackData } = newTermData;
+        const { data: retryData, error: retryError } = await supabase
+          .from('terms')
+          .insert(fallbackData)
+          .select()
+          .single();
+
+        if (retryError) {
+          return NextResponse.json({ error: retryError.message }, { status: 500 });
+        }
+        return NextResponse.json({ term: retryData });
       }
 
       return NextResponse.json({ term: data });
@@ -88,7 +100,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, term, note, level, next_review_at } = await req.json();
+    const { id, term, note, tag, level, next_review_at } = await req.json();
     if (!id) {
       return NextResponse.json({ error: 'Term ID is required' }, { status: 400 });
     }
@@ -96,6 +108,7 @@ export async function PATCH(req: NextRequest) {
     const updates: Partial<Term> = {};
     if (term !== undefined) updates.term = term.trim();
     if (note !== undefined) updates.note = (note || '').trim();
+    if (tag !== undefined) updates.tag = tag.trim();
     if (level !== undefined) updates.level = level;
     if (next_review_at !== undefined) updates.next_review_at = next_review_at;
 
@@ -108,7 +121,19 @@ export async function PATCH(req: NextRequest) {
         .single();
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        // tagカラムがない場合のエラー回避
+        const { tag: _, ...safeUpdates } = updates;
+        const { data: safeData, error: safeError } = await supabase
+          .from('terms')
+          .update(safeUpdates)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (safeError) {
+          return NextResponse.json({ error: safeError.message }, { status: 500 });
+        }
+        return NextResponse.json({ term: safeData });
       }
 
       return NextResponse.json({ term: data });
