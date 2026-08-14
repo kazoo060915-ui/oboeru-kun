@@ -593,6 +593,45 @@ export default function Home() {
                 </p>
               </div>
 
+              {/* 質問クイックボタン（いつでも追加質問可能） */}
+              <div className="flex flex-wrap gap-2 border-b border-[#1A1714]/15 bg-white/50 px-4 py-2.5">
+                <button
+                  onClick={() => askChat('もっと簡単に言い直して')}
+                  disabled={chatLoading}
+                  className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] disabled:opacity-50"
+                >
+                  もっと簡単に
+                </button>
+                <button
+                  onClick={() => askChat('別の身近な日常シーンに例えて説明して')}
+                  disabled={chatLoading}
+                  className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
+                >
+                  別の例えで
+                </button>
+                <button
+                  onClick={() => askChat('実務や現場では具体的にどう使われる？')}
+                  disabled={chatLoading}
+                  className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
+                >
+                  実務での使い道
+                </button>
+                <button
+                  onClick={() => askChat('それぞれの文字が何の単語か省略せず詳しく語呂合わせ教えて！')}
+                  disabled={chatLoading}
+                  className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
+                >
+                  語呂合わせは？
+                </button>
+                <button
+                  onClick={() => askChat('流れや仕組みを分かりやすくテキスト図解して！')}
+                  disabled={chatLoading}
+                  className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
+                >
+                  図解して
+                </button>
+              </div>
+
               {chat.length > 0 && (
                 <div className="space-y-3 px-4 py-4">
                   {chat.map((m, i) => (
@@ -617,41 +656,6 @@ export default function Home() {
                 </div>
               )}
 
-              {chat.length === 0 && (
-                <div className="flex flex-wrap gap-2 px-4 pt-4">
-                  <button
-                    onClick={() => askChat('もっと簡単に言い直して')}
-                    className="border-2 border-[#1A1714] bg-white px-3 py-1.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
-                  >
-                    もっと簡単に
-                  </button>
-                  <button
-                    onClick={() => askChat('別の身近な日常シーンに例えて説明して')}
-                    className="border-2 border-[#1A1714] bg-white px-3 py-1.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
-                  >
-                    別の例えで
-                  </button>
-                  <button
-                    onClick={() => askChat('実務や現場では具体的にどう使われる？')}
-                    className="border-2 border-[#1A1714] bg-white px-3 py-1.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
-                  >
-                    実務での使い道
-                  </button>
-                  <button
-                    onClick={() => askChat('別のクスッと笑える語呂合わせをもう1個教えて！')}
-                    className="border-2 border-[#1A1714] bg-white px-3 py-1.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
-                  >
-                    別の語呂合わせ
-                  </button>
-                  <button
-                    onClick={() => askChat('流れや仕組みを分かりやすくテキスト図解して！')}
-                    className="border-2 border-[#1A1714] bg-white px-3 py-1.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
-                  >
-                    図解して
-                  </button>
-                </div>
-              )}
-
               <div className="flex gap-2 p-4">
                 <MicButton
                   onText={(t) => setChatInput((c) => (c ? c.trim() + ' ' : '') + t)}
@@ -661,7 +665,12 @@ export default function Home() {
                 <input
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && askChat()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      askChat();
+                    }
+                  }}
                   placeholder="例：これってコードのどこに書くの？"
                   className="min-w-0 flex-1 border-2 border-[#1A1714] bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#B83227]"
                 />
