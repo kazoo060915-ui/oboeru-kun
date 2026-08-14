@@ -12,6 +12,7 @@ import { Term, getTermTag } from '@/lib/types';
 import { CoachType, COACH_LIST } from '@/lib/coach';
 import { todayStr } from '@/lib/date';
 import { INTERVALS } from '@/lib/constants';
+import { triggerScoreEffects, triggerSessionCompleteEffects } from '@/lib/effects';
 
 export default function Home() {
   const [terms, setTerms] = useState<Term[] | null>(null);
@@ -111,6 +112,14 @@ export default function Home() {
     localStorage.setItem('oboeru-coach', c);
     setShowCoachMenu(false);
   };
+
+  // セッション完了時の紙吹雪演出
+  useEffect(() => {
+    if (view === 'session_summary' && sessionScores.length > 0) {
+      const avg = Math.round(sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length);
+      triggerSessionCompleteEffects(avg);
+    }
+  }, [view, sessionScores]);
 
   const today = todayStr();
   const due = (terms || []).filter((t) => t.next_review_at <= today);
@@ -242,6 +251,9 @@ export default function Home() {
         );
         setTerms(updatedTerms);
       }
+
+      // スコアに応じた演出を発火（80点以上は桜吹雪、40点未満はシェイク等）
+      triggerScoreEffects(data.result.score);
 
       setView('result');
     } catch (err: any) {
@@ -952,33 +964,50 @@ export default function Home() {
             )}
 
             {/* ツッコミ & 印鑑判子 */}
-            <div className="relative border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">
-                    {current.term}
-                  </p>
-                  <span className="border border-[#1A1714]/30 bg-white px-1.5 py-0.2 font-mono text-[10px] text-[#1A1714]/70">
-                    🏷️ {getTermTag(current)}
-                  </span>
+            <div
+              className={`relative border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714] overflow-hidden ${
+                result.score < 40 ? 'shake-effect' : ''
+              }`}
+            >
+              {/* 低得点（40点未満）時のしとしと雨粒/涙エフェクト */}
+              {result.score < 40 && (
+                <div className="pointer-events-none absolute inset-0 flex justify-around opacity-60 z-0">
+                  <span className="rain-drop text-sm" style={{ animationDelay: '0s' }}>💧</span>
+                  <span className="rain-drop text-xs" style={{ animationDelay: '0.4s' }}>💧</span>
+                  <span className="rain-drop text-sm" style={{ animationDelay: '0.8s' }}>💧</span>
+                  <span className="rain-drop text-xs" style={{ animationDelay: '0.2s' }}>💧</span>
+                  <span className="rain-drop text-sm" style={{ animationDelay: '0.6s' }}>💧</span>
                 </div>
-                <button
-                  onClick={handleDeleteCurrentTerm}
-                  title="この用語を復習から除外（削除）する"
-                  className="font-mono text-[10px] text-[#B83227] underline hover:text-[#9c2a20]"
-                >
-                  🗑️ 復習から外す
-                </button>
+              )}
+
+              <div className="relative z-10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">
+                      {current.term}
+                    </p>
+                    <span className="border border-[#1A1714]/30 bg-white px-1.5 py-0.2 font-mono text-[10px] text-[#1A1714]/70">
+                      🏷️ {getTermTag(current)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleDeleteCurrentTerm}
+                    title="この用語を復習から除外（削除）する"
+                    className="font-mono text-[10px] text-[#B83227] underline hover:text-[#9c2a20]"
+                  >
+                    🗑️ 復習から外す
+                  </button>
+                </div>
+                {/* absolute配置だと、スマホ幅ではpadding-rightで本文の実効幅が
+                    極端に狭くなり、1行あたり数文字しか入らず縦長になっていた。
+                    floatで文章側に回り込ませることで、判子を避けつつ全幅を使う。 */}
+                <div className="float-right ml-3 mb-1">
+                  <Stamp score={result.score} />
+                </div>
+                <p className="mt-4 font-serif text-xl font-bold leading-relaxed text-[#1A1714]">
+                  「{result.tsukkomi}」
+                </p>
               </div>
-              {/* absolute配置だと、スマホ幅ではpadding-rightで本文の実効幅が
-                  極端に狭くなり、1行あたり数文字しか入らず縦長になっていた。
-                  floatで文章側に回り込ませることで、判子を避けつつ全幅を使う。 */}
-              <div className="float-right ml-3 mb-1">
-                <Stamp score={result.score} />
-              </div>
-              <p className="mt-4 font-serif text-xl font-bold leading-relaxed text-[#1A1714]">
-                「{result.tsukkomi}」
-              </p>
             </div>
 
             {/* 正しい説明 & 足りなかったキーワード */}

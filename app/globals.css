@@ -45,9 +45,42 @@ select {
   animation: thump 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
 
+/* 低得点時のガーン画面揺れ */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.shake-effect {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* 低得点時の雨粒/涙エフェクト */
+@keyframes rain-fall {
+  0% {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(160px);
+    opacity: 0;
+  }
+}
+
+.rain-drop {
+  animation: rain-fall 1.8s ease-in infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stamp {
     animation: none;
     transform: rotate(-9deg);
+  }
+  .shake-effect {
+    animation: none;
   }
 }
