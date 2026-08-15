@@ -48,6 +48,7 @@ export default function Home() {
   const [chat, setChat] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const chatSectionRef = React.useRef<HTMLDivElement>(null);
 
   // ヒント表示状態
   const [showHint, setShowHint] = useState(false);
@@ -273,6 +274,11 @@ export default function Home() {
     setChatInput('');
     setChatLoading(true);
 
+    // チャット欄へスムーズスクロール
+    setTimeout(() => {
+      chatSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -299,6 +305,30 @@ export default function Home() {
       ]);
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const handleAddQuickTerm = async (termText: string) => {
+    if (!termText.trim()) return;
+    try {
+      const res = await fetch('/api/terms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          term: termText.trim(),
+          note: current ? `「${current.term}」の解説中に出てきた関連用語` : '解説中から追加',
+          tag: current?.tag || '関連用語',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.term) {
+        if (terms) setTerms([data.term, ...terms]);
+        alert(`「${termText}」を覚える君の単語帳に登録したで！次回から復習に出るよ。`);
+      } else {
+        alert('すでに登録されているか、登録に失敗しました。');
+      }
+    } catch {
+      alert('登録中にエラーが発生しました。');
     }
   };
 
@@ -1013,29 +1043,19 @@ export default function Home() {
 
             {/* 正しい説明 & 足りなかったキーワード */}
             <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-5 shadow-[4px_4px_0_0_#1A1714]">
-              <h3 className="font-serif text-lg font-bold text-[#1A1714]">ほんまのところ</h3>
-              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#1A1714]/90">
-                {result.correct}
-              </p>
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif text-lg font-bold text-[#1A1714]">ほんまのところ</h3>
+                <span className="text-[11px] font-bold text-[#B83227]">
+                  💡 気になる単語をタップで即質問！
+                </span>
+              </div>
 
-              {result.missed && result.missed.length > 0 && (
-                <div className="mt-4 border-t border-[#1A1714]/15 pt-3">
-                  <p className="text-xs font-bold text-[#1A1714]/60">
-                    言えてなかった言葉（タップで質問）
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {result.missed.map((m, i) => (
-                      <button
-                        key={i}
-                        onClick={() => askChat(`「${m}」ってどういう意味？`)}
-                        className="border border-[#B83227] bg-white px-2 py-1 font-mono text-xs font-bold text-[#B83227] hover:bg-[#B83227] hover:text-[#F7F1E3]"
-                      >
-                        {m} <span aria-hidden="true">?</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <InteractiveExplanation
+                text={result.correct}
+                missedWords={result.missed}
+                onWordClick={(word) => askChat(`「${word}」ってどういう意味？`)}
+                onAddTerm={handleAddQuickTerm}
+              />
             </div>
 
             {/* ミニ課題ミッション */}
@@ -1047,7 +1067,10 @@ export default function Home() {
             </div>
 
             {/* 答えた後限定：聞き返しチャット */}
-            <div className="border-2 border-[#1A1714] bg-[#F7F1E3] shadow-[6px_6px_0_0_#1A1714]">
+            <div
+              ref={chatSectionRef}
+              className="border-2 border-[#1A1714] bg-[#F7F1E3] shadow-[6px_6px_0_0_#1A1714]"
+            >
               <div className="border-b-2 border-[#1A1714] px-4 py-3">
                 <h3 className="font-serif text-base font-bold">覚える君に聞き返す</h3>
                 <p className="text-xs text-[#1A1714]/60">
@@ -1304,6 +1327,125 @@ export default function Home() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+interface InteractiveExplanationProps {
+  text: string;
+  missedWords?: string[];
+  onWordClick: (word: string) => void;
+  onAddTerm?: (word: string) => void;
+}
+
+function InteractiveExplanation({
+  text,
+  missedWords = [],
+  onWordClick,
+  onAddTerm,
+}: InteractiveExplanationProps) {
+  // 抽出対象のキーワード一覧（重複排除）
+  const detectedKeywords = React.useMemo(() => {
+    const list: string[] = [];
+
+    // 1. missedWords（言えなかった言葉）
+    missedWords.forEach((m) => {
+      const clean = m.replace(/[()（）=＝].*$/, '').trim();
+      if (clean && clean.length >= 2 && !list.includes(clean)) list.push(clean);
+    });
+
+    // 2. 『』や「」で囲まれた単語
+    const bracketMatches = text.match(/[『「]([^』」\n]{2,20})[』」]/g) || [];
+    bracketMatches.forEach((b) => {
+      const w = b.slice(1, -1).trim();
+      if (w && !list.includes(w)) list.push(w);
+    });
+
+    // 3. 英字・記号の略語・専門用語 (2文字以上: TCP/IP, HTTP/2, HTTP/3, UDP, QUIC, Cookie, etc.)
+    const codeMatches = text.match(/\b[A-Za-z][A-Za-z0-9_/+.-]{1,15}\b/g) || [];
+    codeMatches.forEach((c) => {
+      const w = c.trim();
+      // 一般的な助詞・一般英単語の除外
+      const stopwords = ['is', 'to', 'in', 'of', 'and', 'the', 'for', 'it', 'on', 'at', 'by', 'with', 'from'];
+      if (w.length >= 2 && !stopwords.includes(w.toLowerCase()) && !list.includes(w)) {
+        list.push(w);
+      }
+    });
+
+    // 長い単語順にソート（部分一致で短いものが先にマッチするのを防ぐ）
+    return list.sort((a, b) => b.length - a.length);
+  }, [text, missedWords]);
+
+  // テキストをキーワードで分割してリンク化
+  const renderFormattedText = () => {
+    if (detectedKeywords.length === 0) {
+      return text;
+    }
+
+    const escapedKeywords = detectedKeywords.map((k) => k.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'));
+    const regex = new RegExp(`(${escapedKeywords.join('|')})`, 'g');
+    const parts = text.split(regex);
+
+    return parts.map((part, index) => {
+      const isKeyword = detectedKeywords.includes(part);
+      if (isKeyword) {
+        return (
+          <button
+            key={index}
+            type="button"
+            onClick={() => onWordClick(part)}
+            title={`「${part}」について覚える君に質問する`}
+            className="inline-flex items-center mx-0.5 px-1 py-0.5 font-bold text-[#B83227] bg-[#B83227]/10 hover:bg-[#B83227] hover:text-white rounded border border-[#B83227]/30 transition-all cursor-pointer underline decoration-[#B83227] decoration-2 underline-offset-2 text-inherit"
+          >
+            <span>{part}</span>
+            <span className="ml-0.5 text-[10px] opacity-75 font-mono">?</span>
+          </button>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
+  return (
+    <div>
+      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#1A1714]/90">
+        {renderFormattedText()}
+      </p>
+
+      {/* 抽出されたキーワード一覧（スマホでタップしやすいチップ一覧） */}
+      {detectedKeywords.length > 0 && (
+        <div className="mt-4 border-t border-[#1A1714]/15 pt-3">
+          <p className="text-xs font-bold text-[#1A1714]/70">
+            🔍 出てきた用語（タップで質問 / ＋で単語帳に追加）:
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {detectedKeywords.map((k, i) => (
+              <div
+                key={i}
+                className="inline-flex items-center border border-[#B83227] bg-white text-xs font-bold text-[#B83227] shadow-[2px_2px_0_0_#1A1714]"
+              >
+                <button
+                  type="button"
+                  onClick={() => onWordClick(k)}
+                  className="px-2 py-1 hover:bg-[#B83227] hover:text-[#F7F1E3] transition-colors"
+                >
+                  {k} <span className="font-mono text-[10px]">?</span>
+                </button>
+                {onAddTerm && (
+                  <button
+                    type="button"
+                    onClick={() => onAddTerm(k)}
+                    title={`「${k}」を復習リストに新規追加`}
+                    className="border-l border-[#B83227]/30 px-1.5 py-1 text-[11px] hover:bg-[#D9A441] hover:text-[#1A1714] transition-colors"
+                  >
+                    ＋追加
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
