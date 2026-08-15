@@ -11,14 +11,20 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const { term, note, answer, termId, currentLevel = 0, coach = 'osaka' } = await req.json();
+    const { term, note, answer, termId, currentLevel = 0, coach = 'osaka', userName = 'あなた' } = await req.json();
 
     if (!term) {
       return NextResponse.json({ error: 'Term is required' }, { status: 400 });
     }
 
     // 1. Anthropic API で採点
-    const result = await gradeAnswer(term, note || '', answer || '', normalizeCoach(coach));
+    const result = await gradeAnswer(
+      term,
+      note || '',
+      answer || '',
+      normalizeCoach(coach),
+      userName?.trim() || 'あなた'
+    );
 
     // 2. レベルおよび次回復習日の計算
     const score = result.score;

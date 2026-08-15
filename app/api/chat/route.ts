@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const { term, note, answer, correct, mission, chatHistory, coach = 'osaka' } = await req.json();
+    const { term, note, answer, correct, mission, chatHistory, coach = 'osaka', userName = 'あなた' } = await req.json();
 
     if (!term) {
       return NextResponse.json({ error: 'Term is required' }, { status: 400 });
@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
       correct || '',
       mission || '',
       (chatHistory as ChatMessage[]) || [],
-      normalizeCoach(coach)
+      normalizeCoach(coach),
+      userName?.trim() || 'あなた'
     );
 
     return NextResponse.json({ reply });

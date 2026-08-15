@@ -136,14 +136,24 @@ export interface GradeResult {
 // ──────────────────────────────────────────
 // 採点プロンプト
 // ──────────────────────────────────────────
-function buildGradePrompt(term: string, note: string, body: string, coach: CoachType = 'osaka'): string {
+function buildGradePrompt(
+  term: string,
+  note: string,
+  body: string,
+  coach: CoachType = 'osaka',
+  userName: string = 'あなた'
+): string {
   const persona = getCoachPersona(coach);
   return `あなたは「覚える君」アプリの学習コーチです。
-生徒はWeb開発、プログラミング、AI、資格、ビジネスなどの知識を学んでいる学習者です。
+生徒の名前は【${userName}】です。
 生徒が用語について自分の言葉で説明した内容を採点し、キャラクターらしく的確で愛のあるフィードバックを行ってください。
 
 ## あなたのキャラクター設定（必ずこの通りに振る舞うこと）
 ${persona}
+
+## 呼称・呼びかけのルール（超重要！）
+- **「生徒さん」「ユーザー」「受講生」などの他人行儀・事務的な呼び方は絶対に禁止**。
+- 必ず【${userName}】と名前・ニックネームで直接呼びかけてください（例: 「${userName}、ええ線いっとるやん！」「${userName}さん、素晴らしい着眼点です！」「${userName}！その調子だぜ！」）。
 
 ## 重要な解説構成ルール（超重要！）
 1. **【技術的な正体・分類を冒頭でスパッと言い切る】**:
@@ -154,7 +164,7 @@ ${persona}
 3. **【日常の例え ＋ なぜ使うか（Why & Benefit）】**:
    - 身近な日常生活や道具に例えた上で、「これを使うと何が嬉しいのか」「使わないとどう困るのか」を分かりやすく解説する。
 4. **【解説の末尾に『質問への呼び水（対話を促すセリフ）』を必ず入れる！】**:
-   - 生徒が「へ〜」で読み流して終わらないよう、**解説の最後にあなたのキャラクターの口調で『これでイメージ湧いたか？「〇〇と何が違うん？」とか「コードのどこに書くん？」とか、ちょっとでもモヤッとしたら下のチャットでなんでも聞いてや！』と、具体的な疑問の例を添えて質問を促す呼びかけを入れること**。
+   - 生徒が「へ〜」で読み流して終わらないよう、**解説の最後にあなたのキャラクターの口調で『これでイメージ湧いたか、${userName}？「〇〇と何が違うん？」とか「コードのどこに書くん？」とか、ちょっとでもモヤッとしたら下のチャットでなんでも聞いてや！』と、${userName}に直接問いかけるセリフを入れること**。
 5. **【企業名・製品名・最新モデルの正確性】**:
    - 企業名と製品名の組み合わせを正確に扱う（Claude＝Anthropic、ChatGPT＝OpenAI、Gemini＝Google）。
 6. **マークダウン記号（**）は絶対に使わない。強調は【】や『』を使う。
@@ -162,7 +172,7 @@ ${persona}
 ## 採点対象
 用語: ${term}
 生徒のヒント（どこで出た用語か）: ${note || 'なし'}
-生徒が自分の言葉で説明した内容: ${body}
+${userName}が自分の言葉で説明した内容: ${body}
 
 ## 採点基準（0〜100点）
 - **90〜100点（極上）**: 「なぜ必要か（Why）」「どう動くか（How）」「使うと何が嬉しいか（Benefit）」まで自分の言葉で的確に言語化できている。
@@ -177,8 +187,8 @@ ${persona}
 
 {
   "score": 0〜100の整数,
-  "tsukkomi": "あなたのキャラクターらしい愛のある一言コメント（1〜2文）。生徒の回答内容を具体的に拾い（『○○って言えたのは素晴らしい！けど△△が惜しかったな！』等）、上記のスコア帯に応じた温度感で突っ込む",
-  "correct": "【技術的正体・分類】＋【語源・正式名称】＋【日常の例え】＋【なぜ使うか・仕組み】＋【一生忘れない覚え方】＋【末尾の質問誘導セリフ】の充実構成で、初学者でも一発で腑に落ちるようにあなたのキャラクターの口調で丁寧に解説（5〜8文程度）。アスタリスク(**)は絶対使わない。最後は必ず『これで分かったか？〇〇について分からんかったら下のチャットでなんでも聞いてや！』と質問を促す言葉で締めくくる。",
+  "tsukkomi": "あなたのキャラクターらしい愛のある一言コメント（1〜2文）。${userName}の回答内容を具体的に拾い（『${userName}、○○って言えたのは素晴らしい！けど△△が惜しかったな！』等）、上記のスコア帯に応じた温度感で突っ込む",
+  "correct": "【技術的正体・分類】＋【語源・正式名称】＋【日常の例え】＋【なぜ使うか・仕組み】＋【一生忘れない覚え方】＋【末尾の質問誘導セリフ】の充実構成で、初学者でも一発で腑に落ちるようにあなたのキャラクターの口調で丁寧に解説（5〜8文程度）。アスタリスク(**)は絶対使わない。最後は必ず『これで分かったか、${userName}？〇〇について分からんかったら下のチャットでなんでも聞いてや！』と${userName}に質問を促す言葉で締めくくる。",
   "missed": ["生徒の説明に足りなかった重要キーワードを最大3つ。生徒が既に言えていた言葉は絶対に含めない。生徒が(わからん)の場合は用語の核となるキーワードを入れる"],
   "mission": "今すぐ30秒〜3分で手を動かして実感できる超具体的なミニ課題を1つ。『VS Codeを開いて○○を検索する』『ターミナルで○○を叩く』『ブラウザでGoogle検索して○○を調べる』など、何をどこでやるか（企業と製品の対応も正確に）まで指定する。抽象的な『調べてみよう』は禁止"
 }`;
@@ -193,20 +203,25 @@ function buildChatSystemPrompt(
   userAnswer: string,
   correctText: string,
   missionText: string,
-  coach: CoachType = 'osaka'
+  coach: CoachType = 'osaka',
+  userName: string = 'あなた'
 ): string {
   const persona = getCoachPersona(coach);
-  return `あなたは「覚える君」アプリの学習コーチです。いま生徒と「${term}」の復習が終わったところです。
-生徒が復習結果を読んだ後、さらに理解を深めるために質問やリクエストをしてきます。
+  return `あなたは「覚える君」アプリの学習コーチです。いま生徒の【${userName}】と「${term}」の復習が終わったところです。
+${userName}が復習結果を読んだ後、さらに理解を深めるために質問やリクエストをしてきます。
 あなたのキャラクター設定を守りながら、最高にわかりやすく親身に回答してください。
 
 ## あなたのキャラクター設定（必ずこの通りに振る舞うこと）
 ${persona}
 
+## 呼称・呼びかけのルール
+- 「生徒さん」「ユーザー」などは禁止。必ず【${userName}】と親しみを持って呼ぶこと。
+
 ## 直前の復習コンテキスト
+- 生徒名: ${userName}
 - 用語: ${term}
-- 生徒のヒント: ${note || 'なし'}
-- 生徒の説明: ${userAnswer.trim() || '(わからん)'}
+- ヒント: ${note || 'なし'}
+- ${userName}の説明: ${userAnswer.trim() || '(わからん)'}
 - 正しい説明: ${correctText}
 - 出したミッション: ${missionText}
 
@@ -231,13 +246,14 @@ export async function gradeAnswer(
   term: string,
   note: string,
   userAnswer: string,
-  coach: CoachType = 'osaka'
+  coach: CoachType = 'osaka',
+  userName: string = 'あなた'
 ): Promise<GradeResult> {
   const body = userAnswer.trim() || '(わからん)';
-  const prompt = buildGradePrompt(term, note, body, coach);
+  const prompt = buildGradePrompt(term, note, body, coach, userName);
 
   if (!anthropic) {
-    return buildFallbackGradeResult(term, body, coach);
+    return buildFallbackGradeResult(term, body, coach, userName);
   }
 
   try {
@@ -248,7 +264,7 @@ export async function gradeAnswer(
     });
 
     const text = extractText(response.content);
-    const fallback = buildFallbackGradeResult(term, body, coach);
+    const fallback = buildFallbackGradeResult(term, body, coach, userName);
     const parsed = safeParseJson<GradeResult>(text, fallback);
 
     // ** 記号を綺麗に除去して安全に返却
@@ -261,7 +277,7 @@ export async function gradeAnswer(
     };
   } catch (err) {
     console.error('API or JSON Parse error, fallback activated:', err);
-    return buildFallbackGradeResult(term, body, coach);
+    return buildFallbackGradeResult(term, body, coach, userName);
   }
 }
 
@@ -277,21 +293,22 @@ export async function askCoachChat(
   correctText: string,
   missionText: string,
   chatHistory: ChatMessage[],
-  coach: CoachType = 'osaka'
+  coach: CoachType = 'osaka',
+  userName: string = 'あなた'
 ): Promise<string> {
-  const systemPrompt = buildChatSystemPrompt(term, note, userAnswer, correctText, missionText, coach);
+  const systemPrompt = buildChatSystemPrompt(term, note, userAnswer, correctText, missionText, coach, userName);
   
   // コーチ別の初期挨拶セリフ
   const greetings: Record<CoachType, string> = {
-    osaka:    'ほな、なんでも聞いてや！例え話でも実務の話でもなんでも答えるで！',
-    praise:   'なんでも聞いてね！一緒に楽しく理解を深めよう✨',
-    mentor:   '何か疑問点があれば遠慮なくどうぞ。論理的かつ実践的に解説します。',
-    hotblood: '聞きたいことがあったら遠慮なくドンドン来い！！熱く答えてやるぜ！！',
-    sage:     'フォッフォッフォ、何でも聞くがよい。知恵を授けようぞ。',
+    osaka:    `ほな${userName}、なんでも聞いてや！例え話でも実務の話でもなんでも答えるで！`,
+    praise:   `${userName}さん、なんでも聞いてね！一緒に楽しく理解を深めよう✨`,
+    mentor:   `${userName}さん、何か疑問点があれば遠慮なくどうぞ。論理的かつ実践的に解説します。`,
+    hotblood: `${userName}！聞きたいことがあったら遠慮なくドンドン来い！！熱く答えてやるぜ！！`,
+    sage:     `フォッフォッフォ、${userName}よ、何でも聞くがよい。知恵を授けようぞ。`,
   };
 
   if (!anthropic) {
-    return buildFallbackChatReply(chatHistory, coach);
+    return buildFallbackChatReply(chatHistory, coach, userName);
   }
 
   try {
@@ -310,26 +327,26 @@ export async function askCoachChat(
     return cleaned || 'うまく答えられんかった。もう一度聞いてみて！';
   } catch (err) {
     console.error('Coach Chat API Error:', err);
-    return buildFallbackChatReply(chatHistory, coach);
+    return buildFallbackChatReply(chatHistory, coach, userName);
   }
 }
 
 // ──────────────────────────────────────────
 // フォールバック（APIキー未設定時・エラー時）
 // ──────────────────────────────────────────
-function buildFallbackGradeResult(term: string, body: string, coach: CoachType = 'osaka'): GradeResult {
+function buildFallbackGradeResult(term: string, body: string, coach: CoachType = 'osaka', userName: string = 'あなた'): GradeResult {
   const isWakaran = body === '(わからん)';
 
   if (isWakaran) {
     const correctText = coach === 'osaka'
-      ? `【正体と例え】「${term}」はな、ざっくり言うたらプログラムやWebを正しくスムーズに動かすための【専門の道具・ルール】のことや！\n日常で言うたら「お決まりの連絡網」や「専用の窓口」みたいなもんやで。\n【仕組み】これがあるおかげで、エラーを防いで安全にデータをやり取りできるんや。\n【覚え方】声に出してリズムで覚えるのが一番効くで！\nこれでイメージ湧いたか？ちょっとでも分からんかったら下のチャットでなんでも聞いてや！`
-      : `【基本概念】「${term}」はシステムやWebアプリケーションを正しく安全に動かすための重要な構成要素です。\n身近な例で言うと「専用の受付窓口」のような役割を果たしています。\n少しでも疑問点があれば、下のチャットでお気軽にご質問ください！`;
+      ? `【正体と例え】「${term}」はな、ざっくり言うたらプログラムやWebを正しくスムーズに動かすための【専門の道具・ルール】のことや！\n日常で言うたら「お決まりの連絡網」や「専用の窓口」みたいなもんやで。\n【仕組み】これがあるおかげで、エラーを防いで安全にデータをやり取りできるんや。\n【覚え方】声に出してリズムで覚えるのが一番効くで！\nこれでイメージ湧いたか、${userName}？ちょっとでも分からんかったら下のチャットでなんでも聞いてや！`
+      : `【基本概念】「${term}」はシステムやWebアプリケーションを正しく安全に動かすための重要な構成要素です。\n身近な例で言うと「専用の受付窓口」のような役割を果たしています。\n${userName}さん、少しでも疑問点があれば、下のチャットでお気軽にご質問ください！`;
 
     return {
       score: 15,
       tsukkomi: coach === 'osaka'
-        ? '「わからん」って正直に言えたの、それだけで百点満点のスタートや！忘れたもんはしゃーない、今すぐ頭に焼き付けよ！'
-        : '正直に「わからない」と言えたのが一番の成長のチャンスです！一緒にマスターしましょう。',
+        ? `${userName}、「わからん」って正直に言えたの、それだけで百点満点のスタートや！忘れたもんはしゃーない、今すぐ頭に焼き付けよ！`
+        : `${userName}さん、正直に「わからない」と言えたのが一番の成長のチャンスです！一緒にマスターしましょう。`,
       correct: correctText,
       missed: [term, '仕組み'],
       mission: `VS Codeで Cmd+Shift+F（全体検索）を押して「${term}」を検索してみよう！プロジェクト内のどこで使われているか1箇所見つけるだけでOK！`,
@@ -337,26 +354,26 @@ function buildFallbackGradeResult(term: string, body: string, coach: CoachType =
   }
 
   const correctText = coach === 'osaka'
-    ? `【正体と例え】「${term}」はな、Web開発やシステムでよく使われる【便利な道具箱・お決まりの仕組み】のことや！\n日常で言うたら「作業を一瞬で終わらせるショートカットキー」みたいなもんやで。\n【仕組み】単に名前を知るだけやなくて「なぜこれが必要か」「使うと何が嬉しいか」を押さえておくと、実戦でグッと応用が効くようになるんや！\n【覚え方】声に出して特徴的なキーワードと一緒に頭に叩き込むのがコツやで！\nこれで分かったか？「ほなこれってコードのどこに書くん？」とか疑問があったら下のチャットで何でも聞いてや！`
-    : `【基本概念】「${term}」は開発を効率化し、システムを安定して動かすための重要な仕組みです。\n「なぜそれを使うのか」「どのようなメリットがあるのか」を意識して押さえておくと、実務で大いに役立ちます。\nご不明な点があれば、下のチャットにて何なりとお尋ねください。`;
+    ? `【正体と例え】「${term}」はな、Web開発やシステムでよく使われる【便利な道具箱・お決まりの仕組み】のことや！\n日常で言うたら「作業を一瞬で終わらせるショートカットキー」みたいなもんやで。\n【仕組み】単に名前を知るだけやなくて「なぜこれが必要か」「使うと何が嬉しいか」を押さえておくと、実戦でグッと応用が効くようになるんや！\n【覚え方】声に出して特徴的なキーワードと一緒に頭に叩き込むのがコツやで！\nこれで分かったか、${userName}？「ほなこれってコードのどこに書くん？」とか疑問があったら下のチャットで何でも聞いてや！`
+    : `【基本概念】「${term}」は開発を効率化し、システムを安定して動かすための重要な仕組みです。\n「なぜそれを使うのか」「どのようなメリットがあるのか」を意識して押さえておくと、実務で大いに役立ちます。\n${userName}さん、ご不明な点があれば、下のチャットにて何なりとお尋ねください。`;
 
   return {
     score: 75,
     tsukkomi: coach === 'osaka'
-      ? 'おっ、ええ線いっとるやん！コアな部分は捉えとるから、あとは「なぜそれを使うんか」まで言えたら完璧やったな！'
-      : '良い着眼点です！基本概念は掴めているので、さらに「メリットや背景」まで言語化できると完璧です。',
+      ? `おっ、${userName}！ええ線いっとるやん！コアな部分は捉えとるから、あとは「なぜそれを使うんか」まで言えたら完璧やったな！`
+      : `${userName}さん、良い着眼点です！基本概念は掴めているので、さらに「メリットや背景」まで言語化できると完璧です。`,
     correct: correctText,
     missed: [term, '本質', 'メリット'],
     mission: `VS Codeを開いて「${term}」が使われているファイルを1つ開き、その周辺のコードを声に出して読んでみよう！`,
   };
 }
 
-function buildFallbackChatReply(chatHistory: ChatMessage[], coach: CoachType = 'osaka'): string {
+function buildFallbackChatReply(chatHistory: ChatMessage[], coach: CoachType = 'osaka', userName: string = 'あなた'): string {
   const lastQuestion = chatHistory[chatHistory.length - 1]?.content || '';
   if (coach === 'osaka') {
-    return `ええ質問やん！「${lastQuestion.slice(0, 20)}」についてやな。ざっくり言うと、開発をスムーズにしてバグを防ぐための仕組みやで。もっと詳しく聞きたいとこあったら言うてな！`;
+    return `ええ質問やん、${userName}！「${lastQuestion.slice(0, 20)}」についてやな。ざっくり言うと、開発をスムーズにしてバグを防ぐための仕組みやで。もっと詳しく聞きたいとこあったら言うてな！`;
   }
-  return `ご質問ありがとうございます。「${lastQuestion.slice(0, 20)}」についてですね。これはシステムを安定させ、開発を効率化するための重要な概念です。気になる点があればさらに詳しくお聞きください。`;
+  return `${userName}さん、ご質問ありがとうございます。「${lastQuestion.slice(0, 20)}」についてですね。これはシステムを安定させ、開発を効率化するための重要な概念です。気になる点があればさらに詳しくお聞きください。`;
 }
 
 // ──────────────────────────────────────────

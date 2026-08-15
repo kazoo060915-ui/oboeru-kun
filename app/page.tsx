@@ -53,6 +53,11 @@ export default function Home() {
   // ヒント表示状態
   const [showHint, setShowHint] = useState(false);
 
+  // ユーザー名・ニックネーム設定（localStorageで永続）
+  const [userName, setUserName] = useState<string>('カズ');
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [nameInput, setNameInput] = useState('カズ');
+
   // コーチキャラクター選択（localStorageで永続）
   const [coach, setCoach] = useState<CoachType>('osaka');
   const [showCoachMenu, setShowCoachMenu] = useState(false);
@@ -62,6 +67,24 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [showImporter, setShowImporter] = useState(false);
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
+
+  // ユーザー名の初期読み込み
+  useEffect(() => {
+    const savedName = localStorage.getItem('oboeru_user_name');
+    if (savedName) {
+      setUserName(savedName);
+      setNameInput(savedName);
+    }
+  }, []);
+
+  const handleSaveName = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = nameInput.trim() || 'カズ';
+    setUserName(trimmed);
+    setNameInput(trimmed);
+    localStorage.setItem('oboeru_user_name', trimmed);
+    setShowNameModal(false);
+  };
 
   // 認証ステータスチェック
   useEffect(() => {
@@ -226,6 +249,7 @@ export default function Home() {
           termId: current.id,
           currentLevel: current.level,
           coach,
+          userName,
         }),
       });
 
@@ -291,6 +315,7 @@ export default function Home() {
           mission: result.mission,
           chatHistory: nextChat,
           coach,
+          userName,
         }),
       });
 
@@ -503,45 +528,111 @@ export default function Home() {
         />
       )}
 
+      {/* お名前・ニックネーム設定モーダル */}
+      {showNameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A1714]/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm border-2 border-[#1A1714] bg-[#F7F1E3] p-5 shadow-[6px_6px_0_0_#1A1714]">
+            <div className="flex items-center justify-between border-b border-[#1A1714]/20 pb-3">
+              <h3 className="font-serif text-lg font-bold text-[#1A1714]">👤 お名前の設定</h3>
+              <button
+                onClick={() => setShowNameModal(false)}
+                className="font-bold text-[#1A1714]/60 hover:text-[#1A1714]"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleSaveName} className="mt-4 space-y-3">
+              <p className="text-xs text-[#1A1714]/70 leading-relaxed">
+                覚える君に呼んでほしいニックネームを入力してください。（例: カズ、田中、たっちゃん）
+              </p>
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="例: カズ"
+                maxLength={15}
+                autoFocus
+                className="w-full border-2 border-[#1A1714] bg-white p-2.5 text-base font-bold text-[#1A1714] focus:outline-none focus:ring-2 focus:ring-[#B83227]"
+              />
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 border-2 border-[#1A1714] bg-[#B83227] py-2.5 font-bold text-[#F7F1E3] hover:bg-[#9c2a20]"
+                >
+                  保存する
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowNameModal(false)}
+                  className="border-2 border-[#1A1714] px-4 py-2.5 font-bold hover:bg-[#1A1714]/10"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-xl">
         <Header todayStr={today} onOpenSettings={() => setShowSettings(true)} />
 
-        {/* コーチセレクター */}
-        <div className="relative mb-4">
+        {/* コーチ＆ニックネーム設定バー */}
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          {/* コーチセレクター */}
+          <div className="relative">
+            <button
+              onClick={() => setShowCoachMenu((v) => !v)}
+              className="flex w-full items-center justify-between border-2 border-[#1A1714] bg-[#F7F1E3] px-3.5 py-2.5 shadow-[3px_3px_0_0_#1A1714] hover:bg-[#ede8d0] transition-colors"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xl shrink-0">{COACH_LIST.find((c) => c.id === coach)?.icon}</span>
+                <div className="text-left min-w-0">
+                  <p className="font-mono text-[9px] font-bold tracking-wider text-[#1A1714]/60">COACH</p>
+                  <p className="text-xs sm:text-sm font-bold text-[#1A1714] truncate">{COACH_LIST.find((c) => c.id === coach)?.name}</p>
+                </div>
+              </div>
+              <span className="font-mono text-[10px] text-[#1A1714]/50 shrink-0">{showCoachMenu ? '▲' : '▼'}</span>
+            </button>
+
+            {showCoachMenu && (
+              <div className="absolute left-0 right-0 top-full z-10 border-2 border-t-0 border-[#1A1714] bg-[#F7F1E3] shadow-[4px_4px_0_0_#1A1714]">
+                {COACH_LIST.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => selectCoach(c.id)}
+                    className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-[#D9A441]/30 ${
+                      coach === c.id ? 'bg-[#D9A441]/20 font-bold' : ''
+                    }`}
+                  >
+                    <span className="text-lg">{c.icon}</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#1A1714] truncate">{c.name}</p>
+                      <p className="text-[10px] text-[#1A1714]/60 truncate">{c.description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ニックネーム設定ボタン */}
           <button
-            onClick={() => setShowCoachMenu((v) => !v)}
-            className="flex w-full items-center justify-between border-2 border-[#1A1714] bg-[#F7F1E3] px-4 py-2.5 shadow-[3px_3px_0_0_#1A1714] hover:bg-[#ede8d0] transition-colors"
+            onClick={() => {
+              setNameInput(userName);
+              setShowNameModal(true);
+            }}
+            className="flex items-center justify-between border-2 border-[#1A1714] bg-[#F7F1E3] px-3.5 py-2.5 shadow-[3px_3px_0_0_#1A1714] hover:bg-[#ede8d0] transition-colors"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-xl">{COACH_LIST.find((c) => c.id === coach)?.icon}</span>
-              <div className="text-left">
-                <p className="font-mono text-[10px] font-bold tracking-widest text-[#1A1714]/60">TODAY&apos;S COACH</p>
-                <p className="text-sm font-bold text-[#1A1714]">{COACH_LIST.find((c) => c.id === coach)?.name}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xl shrink-0">👤</span>
+              <div className="text-left min-w-0">
+                <p className="font-mono text-[9px] font-bold tracking-wider text-[#1A1714]/60">LEARNER</p>
+                <p className="text-xs sm:text-sm font-bold text-[#B83227] truncate">{userName} さん</p>
               </div>
             </div>
-            <span className="font-mono text-xs text-[#1A1714]/50">{showCoachMenu ? '▲' : '▼'} 変更</span>
+            <span className="font-mono text-[10px] text-[#1A1714]/50 shrink-0">✏️ 変更</span>
           </button>
-
-          {showCoachMenu && (
-            <div className="absolute left-0 right-0 top-full z-10 border-2 border-t-0 border-[#1A1714] bg-[#F7F1E3] shadow-[4px_4px_0_0_#1A1714]">
-              {COACH_LIST.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => selectCoach(c.id)}
-                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[#D9A441]/30 ${
-                    coach === c.id ? 'bg-[#D9A441]/20 font-bold' : ''
-                  }`}
-                >
-                  <span className="text-xl">{c.icon}</span>
-                  <div>
-                    <p className="text-sm font-bold text-[#1A1714]">{c.name}</p>
-                    <p className="text-xs text-[#1A1714]/60">{c.description}</p>
-                  </div>
-                  {coach === c.id && <span className="ml-auto font-mono text-xs text-[#B83227]">✓ 選択中</span>}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {error && (
