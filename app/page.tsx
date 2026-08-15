@@ -1076,39 +1076,46 @@ export default function Home() {
               {/* 質問クイックボタン（いつでも追加質問可能） */}
               <div className="flex flex-wrap gap-2 border-b border-[#1A1714]/15 bg-white/50 px-4 py-2.5">
                 <button
-                  onClick={() => askChat('もっと簡単に言い直して')}
+                  onClick={() => askChat('もっと簡単に小学生でもわかるように言い直して')}
                   disabled={chatLoading}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] disabled:opacity-50"
                 >
                   もっと簡単に
                 </button>
                 <button
-                  onClick={() => askChat('別の身近な日常シーンに例えて説明して')}
+                  onClick={() => askChat('似ている他の用語と何が違うのか教えて')}
                   disabled={chatLoading}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
                 >
-                  別の例えで
+                  他と何が違う？
                 </button>
                 <button
-                  onClick={() => askChat('実務や現場では具体的にどう使われる？')}
+                  onClick={() => askChat('実際のコードのどこにどう書くのか具体例を見せて')}
+                  disabled={chatLoading}
+                  className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
+                >
+                  コードのどこに書く？
+                </button>
+                <button
+                  onClick={() => askChat('実務や現場では具体的にどう使われる？使わないとどう困る？')}
                   disabled={chatLoading}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
                 >
                   実務での使い道
                 </button>
                 <button
-                  onClick={() => askChat('それぞれの文字が何の単語か省略せず詳しく語呂合わせ教えて！')}
+                  onClick={() => askChat('別の身近な日常シーン（料理・買い物など）に例えて説明して')}
                   disabled={chatLoading}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
                 >
-                  語呂合わせは？
+                  別の例えで
                 </button>
                 <button
                   onClick={() => askChat('流れや仕組みを分かりやすくテキスト図解して！')}
                   disabled={chatLoading}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
                 >
-                  図解して
+                  テキスト図解
                 </button>
               </div>
 
