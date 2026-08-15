@@ -10,8 +10,8 @@ const apiKey = process.env.ANTHROPIC_API_KEY;
 
 export const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
 
-// アプリ裏側で叩くAnthropic APIモデル。高精度・最新の Claude 3.5 Sonnet を指定
-const MODEL_ID = 'claude-3-5-sonnet-20241022';
+// アプリ裏側で叩くAnthropic APIモデル。最新爆速の Claude Haiku 4.5 を指定（1〜2秒で即レス）
+const MODEL_ID = 'claude-haiku-4-5-20251001';
 
 function getCoachPersona(coach: CoachType): string {
   switch (coach) {
