@@ -1043,12 +1043,7 @@ export default function Home() {
 
             {/* 正しい説明 & 足りなかったキーワード */}
             <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-5 shadow-[4px_4px_0_0_#1A1714]">
-              <div className="flex items-center justify-between">
-                <h3 className="font-serif text-lg font-bold text-[#1A1714]">ほんまのところ</h3>
-                <span className="text-[11px] font-bold text-[#B83227]">
-                  💡 気になる単語をタップで即質問！
-                </span>
-              </div>
+              <h3 className="font-serif text-lg font-bold text-[#1A1714]">ほんまのところ</h3>
 
               <InteractiveExplanation
                 text={result.correct}
@@ -1344,81 +1339,59 @@ function InteractiveExplanation({
   onWordClick,
   onAddTerm,
 }: InteractiveExplanationProps) {
-  // 抽出対象のキーワード一覧（重複排除）
+  // 解説文から「真のIT専門用語・プロトコル名」だけを厳選抽出（日常語や例え話は除外）
   const detectedKeywords = React.useMemo(() => {
     const list: string[] = [];
 
-    // 1. missedWords（言えなかった言葉）
+    // 1. missedWords（言えなかった重要キーワード）
     missedWords.forEach((m) => {
       const clean = m.replace(/[()（）=＝].*$/, '').trim();
-      if (clean && clean.length >= 2 && !list.includes(clean)) list.push(clean);
-    });
-
-    // 2. 『』や「」で囲まれた単語
-    const bracketMatches = text.match(/[『「]([^』」\n]{2,20})[』」]/g) || [];
-    bracketMatches.forEach((b) => {
-      const w = b.slice(1, -1).trim();
-      if (w && !list.includes(w)) list.push(w);
-    });
-
-    // 3. 英字・記号の略語・専門用語 (2文字以上: TCP/IP, HTTP/2, HTTP/3, UDP, QUIC, Cookie, etc.)
-    const codeMatches = text.match(/\b[A-Za-z][A-Za-z0-9_/+.-]{1,15}\b/g) || [];
-    codeMatches.forEach((c) => {
-      const w = c.trim();
-      // 一般的な助詞・一般英単語の除外
-      const stopwords = ['is', 'to', 'in', 'of', 'and', 'the', 'for', 'it', 'on', 'at', 'by', 'with', 'from'];
-      if (w.length >= 2 && !stopwords.includes(w.toLowerCase()) && !list.includes(w)) {
-        list.push(w);
+      if (
+        clean &&
+        clean.length >= 2 &&
+        clean.length <= 15 &&
+        !clean.includes(' ') &&
+        !['からあげ', 'お弁当', '寿司', '仕組み', '本質', 'メリット'].some((ng) => clean.includes(ng)) &&
+        !list.includes(clean)
+      ) {
+        list.push(clean);
       }
     });
 
-    // 長い単語順にソート（部分一致で短いものが先にマッチするのを防ぐ）
-    return list.sort((a, b) => b.length - a.length);
+    // 2. 代表的なIT・Web専門用語・プロトコル名のみマッチ（大文字小文字対応）
+    const technicalTerms = [
+      'TCP/IP', 'TCP', 'UDP', 'QUIC', 'HTTP/2', 'HTTP/3', 'HTTP', 'HTTPS',
+      'Content-Type', 'Cookie', 'Header', 'Body', 'Status Code', 'REST', 'API',
+      'JSON', 'HTML', 'CSS', 'JavaScript', 'TypeScript', 'SSR', 'CSR', 'SQL',
+      'DNS', 'SSL', 'TLS', 'MIME', 'POST', 'GET', 'PUT', 'DELETE',
+      'useState', 'useEffect', 'props', 'Next.js', 'React', 'Supabase'
+    ];
+
+    technicalTerms.forEach((term) => {
+      const regex = new RegExp(`\\b${term.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+      if (regex.test(text) && !list.some((existing) => existing.toLowerCase() === term.toLowerCase())) {
+        list.push(term);
+      }
+    });
+
+    // 最大5個までに厳選
+    return list.slice(0, 5);
   }, [text, missedWords]);
-
-  // テキストをキーワードで分割してリンク化
-  const renderFormattedText = () => {
-    if (detectedKeywords.length === 0) {
-      return text;
-    }
-
-    const escapedKeywords = detectedKeywords.map((k) => k.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'));
-    const regex = new RegExp(`(${escapedKeywords.join('|')})`, 'g');
-    const parts = text.split(regex);
-
-    return parts.map((part, index) => {
-      const isKeyword = detectedKeywords.includes(part);
-      if (isKeyword) {
-        return (
-          <button
-            key={index}
-            type="button"
-            onClick={() => onWordClick(part)}
-            title={`「${part}」について覚える君に質問する`}
-            className="inline-flex items-center mx-0.5 px-1 py-0.5 font-bold text-[#B83227] bg-[#B83227]/10 hover:bg-[#B83227] hover:text-white rounded border border-[#B83227]/30 transition-all cursor-pointer underline decoration-[#B83227] decoration-2 underline-offset-2 text-inherit"
-          >
-            <span>{part}</span>
-            <span className="ml-0.5 text-[10px] opacity-75 font-mono">?</span>
-          </button>
-        );
-      }
-      return <span key={index}>{part}</span>;
-    });
-  };
 
   return (
     <div>
-      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#1A1714]/90">
-        {renderFormattedText()}
+      {/* 本文は一切の枠線・ボタン装飾を排除し、自然で美しい文章として表示 */}
+      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#1A1714]">
+        {text}
       </p>
 
-      {/* 抽出されたキーワード一覧（スマホでタップしやすいチップ一覧） */}
+      {/* 厳選された専門用語チップ（最大5個） */}
       {detectedKeywords.length > 0 && (
         <div className="mt-4 border-t border-[#1A1714]/15 pt-3">
           <p className="text-xs font-bold text-[#1A1714]/70">
-            🔍 出てきた用語（タップで質問 / ＋で単語帳に追加）:
+            💬 関連用語を質問する（タップで質問 / ＋で単語帳に追加）:
           </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2 flex flex-wrap gap-2">
             {detectedKeywords.map((k, i) => (
               <div
                 key={i}
@@ -1427,7 +1400,7 @@ function InteractiveExplanation({
                 <button
                   type="button"
                   onClick={() => onWordClick(k)}
-                  className="px-2 py-1 hover:bg-[#B83227] hover:text-[#F7F1E3] transition-colors"
+                  className="px-2.5 py-1 hover:bg-[#B83227] hover:text-[#F7F1E3] transition-colors"
                 >
                   {k} <span className="font-mono text-[10px]">?</span>
                 </button>
@@ -1436,7 +1409,7 @@ function InteractiveExplanation({
                     type="button"
                     onClick={() => onAddTerm(k)}
                     title={`「${k}」を復習リストに新規追加`}
-                    className="border-l border-[#B83227]/30 px-1.5 py-1 text-[11px] hover:bg-[#D9A441] hover:text-[#1A1714] transition-colors"
+                    className="border-l border-[#B83227]/30 px-2 py-1 text-[11px] hover:bg-[#D9A441] hover:text-[#1A1714] transition-colors"
                   >
                     ＋追加
                   </button>
