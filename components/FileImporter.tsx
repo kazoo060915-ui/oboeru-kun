@@ -7,9 +7,11 @@ interface ExtractedTerm {
   term: string;
   note: string;
   tag?: string;
+  isExisting?: boolean;
 }
 
 interface FileImporterProps {
+  existingTerms?: Term[];
   onImported: (terms: Term[]) => void;
   onClose: () => void;
 }
@@ -24,7 +26,11 @@ function extractTagFromFileName(name: string): string {
   return cleanName.slice(0, 15);
 }
 
-export default function FileImporter({ onImported, onClose }: FileImporterProps) {
+function normalizeTerm(term: string): string {
+  return term.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export default function FileImporter({ existingTerms = [], onImported, onClose }: FileImporterProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [progressText, setProgressText] = useState('');
@@ -36,6 +42,11 @@ export default function FileImporter({ onImported, onClose }: FileImporterProps)
   const [isRegistering, setIsRegistering] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 既存用語の正規化セット（高速ルックアップ用）
+  const existingSet = new Set(
+    existingTerms.map((t) => normalizeTerm(t.term))
+  );
+
   // 複数ファイルを一括で処理する関数
   const handleFiles = useCallback(async (files: File[]) => {
     if (files.length === 0) return;
@@ -46,8 +57,7 @@ export default function FileImporter({ onImported, onClose }: FileImporterProps)
     setSelectedIds(new Set());
     setIsExtracting(true);
 
-    const allExtracted: ExtractedTerm[] = [];
-    const processedSources: string[] = [];
+    const rawExtracted: Array<{ term: string; note: string; tag: string }> = [];
     let errorCount = 0;
 
     for (let i = 0; i < files.length; i++) {
@@ -66,13 +76,13 @@ export default function FileImporter({ onImported, onClose }: FileImporterProps)
         const data = await res.json();
 
         if (res.ok && data.terms && data.terms.length > 0) {
-          const termsWithTag = data.terms.map((t: any) => ({
-            term: t.term,
-            note: t.note,
-            tag: autoTag,
-          }));
-          allExtracted.push(...termsWithTag);
-          processedSources.push(file.name);
+          data.terms.forEach((t: any) => {
+            rawExtracted.push({
+              term: (t.term || '').trim(),
+              note: (t.note || '').trim(),
+              tag: autoTag,
+            });
+          });
         } else if (!res.ok) {
           errorCount++;
         }
@@ -84,16 +94,43 @@ export default function FileImporter({ onImported, onClose }: FileImporterProps)
     setIsExtracting(false);
     setProgressText('');
 
-    if (allExtracted.length === 0) {
+    if (rawExtracted.length === 0) {
       setError(
         errorCount > 0
           ? `${files.length} 件のファイルから用語を抽出できませんでした（一部エラー発生）。`
-          : '指定されたファイルから復習すべき用語は見つかりませんでした。'
+          : '指定されたファイルから復習すべき重要用語は見つかりませんでした。'
       );
       return;
     }
 
-    setExtractedTerms(allExtracted);
+    // 重複マージ（ファイル間での同じ単語を1つに統合）
+    const termMap = new Map<string, ExtractedTerm>();
+    let duplicateCount = 0;
+
+    rawExtracted.forEach((item) => {
+      if (!item.term) return;
+      const key = normalizeTerm(item.term);
+
+      if (termMap.has(key)) {
+        duplicateCount++;
+        const existing = termMap.get(key)!;
+        // タグの結合
+        if (item.tag && existing.tag && !existing.tag.includes(item.tag)) {
+          existing.tag = `${existing.tag} / ${item.tag}`;
+        }
+      } else {
+        const isExisting = existingSet.has(key);
+        termMap.set(key, {
+          term: item.term,
+          note: item.note,
+          tag: item.tag,
+          isExisting,
+        });
+      }
+    });
+
+    const mergedList = Array.from(termMap.values());
+    setExtractedTerms(mergedList);
 
     const sourceSummary =
       files.length === 1
@@ -101,14 +138,24 @@ export default function FileImporter({ onImported, onClose }: FileImporterProps)
         : `${files[0].name} ほか全 ${files.length} ファイル`;
     setSourceName(sourceSummary);
 
+    const dupeMsg = duplicateCount > 0 ? `（重複 ${duplicateCount} 件を統合済）` : '';
     setMessage(
-      `合計 ${files.length} 件のファイルから ${allExtracted.length} 件の用語を抽出したで！`
+      `合計 ${files.length} ファイルから ${mergedList.length} 件の最重要用語を厳選したで！${dupeMsg}`
     );
 
-    // 初期状態：全選択
-    const allIds = new Set<number>(allExtracted.map((_, i) => i));
-    setSelectedIds(allIds);
-  }, []);
+    // 初期選択：すでに登録済みのものは除外して選択
+    const initialSelected = new Set<number>();
+    mergedList.forEach((item, i) => {
+      if (!item.isExisting) {
+        initialSelected.add(i);
+      }
+    });
+    // すべて登録済みの場合は全選択
+    if (initialSelected.size === 0 && mergedList.length > 0) {
+      mergedList.forEach((_, i) => initialSelected.add(i));
+    }
+    setSelectedIds(initialSelected);
+  }, [existingSet]);
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -322,9 +369,21 @@ export default function FileImporter({ onImported, onClose }: FileImporterProps)
                       onChange={() => toggleSelect(idx)}
                       className="mt-0.5 h-4 w-4 shrink-0 accent-[#B83227]"
                     />
-                    <div className="min-w-0">
-                      <p className="font-bold text-[#1A1714]">{item.term}</p>
-                      <p className="text-xs text-[#1A1714]/60">{item.note}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="font-bold text-[#1A1714]">{item.term}</p>
+                        {item.tag && (
+                          <span className="rounded bg-[#1A1714]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#1A1714]/70">
+                            {item.tag}
+                          </span>
+                        )}
+                        {item.isExisting && (
+                          <span className="rounded bg-[#B83227]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#B83227]">
+                            登録済み
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-[#1A1714]/60">{item.note}</p>
                     </div>
                   </label>
                 ))}

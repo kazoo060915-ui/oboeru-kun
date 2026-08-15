@@ -443,6 +443,7 @@ export default function Home() {
       {/* ファイルインポートモーダル */}
       {showImporter && (
         <FileImporter
+          existingTerms={terms}
           onClose={() => setShowImporter(false)}
           onImported={(newTerms) => {
             if (terms) {
