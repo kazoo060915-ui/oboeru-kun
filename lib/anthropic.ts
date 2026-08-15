@@ -96,12 +96,33 @@ function stripMarkdownSymbols(text: string): string {
   return text.replace(/\*\*/g, '').replace(/__/g, '').trim();
 }
 
-// 前置きテキスト（「わかりました！」等）が入っていても、最初の { / [ から 最後の } / ] までを安全に抽出する関数
+// 前置きテキスト（「わかりました！」等）が入っていても、最初の { / [ から 最後の } / ] までを安全に抽出・補正する関数
 function cleanJsonText(rawText: string): string {
   const textWithoutCodeBlocks = rawText.replace(/```json|```/g, '').trim();
-  // 最も外側の { ... } または [ ... ] を検索
   const jsonMatch = textWithoutCodeBlocks.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  return jsonMatch ? jsonMatch[0].trim() : textWithoutCodeBlocks;
+  let jsonStr = jsonMatch ? jsonMatch[0].trim() : textWithoutCodeBlocks;
+  return jsonStr;
+}
+
+// 生の改行や特殊文字が含まれていても安全にJSONパースする関数
+function safeParseJson<T>(rawText: string, fallback: T): T {
+  try {
+    const cleaned = cleanJsonText(rawText);
+    return JSON.parse(cleaned) as T;
+  } catch (firstErr) {
+    try {
+      // 生改行が含まれている場合の補正処理
+      const cleaned = cleanJsonText(rawText);
+      // 文字列リテラル内の生改行を \n に置換
+      const sanitized = cleaned.replace(/"((?:[^"\\]|\\.)*)"/g, (match, p1) => {
+        return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+      });
+      return JSON.parse(sanitized) as T;
+    } catch (secondErr) {
+      console.error('safeParseJson failed. Raw text:', rawText, 'Error:', secondErr);
+      return fallback;
+    }
+  }
 }
 
 export interface GradeResult {
@@ -151,7 +172,8 @@ ${persona}
 - **0〜29点（わからん）**: 「わからん」「忘れた」、全く的外れ。
 
 ## 出力形式
-下の JSON **だけ** を返すこと。前置き・説明・マークダウン記号（\`\`\`等）は一切不要。
+必ず以下のキーを持つJSONオブジェクト**だけ**を出力してください。前置きや\`\`\`等のマークダウンは一切不要。
+各フィールド内の改行は \\n としてエスケープしてください。
 
 {
   "score": 0〜100の整数,
@@ -226,16 +248,16 @@ export async function gradeAnswer(
     });
 
     const text = extractText(response.content);
-    const jsonString = cleanJsonText(text);
-    const parsed = JSON.parse(jsonString) as GradeResult;
+    const fallback = buildFallbackGradeResult(term, body, coach);
+    const parsed = safeParseJson<GradeResult>(text, fallback);
 
     // ** 記号を綺麗に除去して安全に返却
     return {
       score: Math.min(100, Math.max(0, Number(parsed.score) || 0)),
-      tsukkomi: stripMarkdownSymbols(parsed.tsukkomi || ''),
-      correct: stripMarkdownSymbols(parsed.correct || ''),
-      missed: Array.isArray(parsed.missed) ? parsed.missed.map((m) => stripMarkdownSymbols(m)) : [],
-      mission: stripMarkdownSymbols(parsed.mission || ''),
+      tsukkomi: stripMarkdownSymbols(parsed.tsukkomi || fallback.tsukkomi),
+      correct: stripMarkdownSymbols(parsed.correct || fallback.correct),
+      missed: Array.isArray(parsed.missed) ? parsed.missed.map((m) => stripMarkdownSymbols(m)) : fallback.missed,
+      mission: stripMarkdownSymbols(parsed.mission || fallback.mission),
     };
   } catch (err) {
     console.error('API or JSON Parse error, fallback activated:', err);
