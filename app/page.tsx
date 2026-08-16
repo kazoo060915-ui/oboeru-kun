@@ -1431,6 +1431,109 @@ interface InteractiveExplanationProps {
   onAddTerm?: (word: string) => void;
 }
 
+// Markdown テーブルおよび通常段落をパースしてレンダリングするコンポーネント（スマホ横スクロール対応）
+function FormattedExplanationText({ text }: { text: string }) {
+  const parts = React.useMemo(() => {
+    const lines = text.split('\n');
+    const elements: Array<{ type: 'text'; content: string } | { type: 'table'; headers: string[]; rows: string[][] }> = [];
+    let currentTextLines: string[] = [];
+    let tableLines: string[] = [];
+    let inTable = false;
+
+    const flushText = () => {
+      if (currentTextLines.length > 0) {
+        const joined = currentTextLines.join('\n').trim();
+        if (joined) {
+          elements.push({ type: 'text', content: joined });
+        }
+        currentTextLines = [];
+      }
+    };
+
+    const flushTable = () => {
+      if (tableLines.length >= 2) {
+        const parsedRows = tableLines
+          .map((line) => line.trim().replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim()))
+          .filter((row) => row.length > 0);
+
+        if (parsedRows.length >= 2) {
+          const headers = parsedRows[0];
+          const isSeparator = (r: string[]) => r.every((cell) => /^[:\-\s]+$/.test(cell));
+          const rows = parsedRows.slice(1).filter((r) => !isSeparator(r));
+          elements.push({ type: 'table', headers, rows });
+        }
+      } else if (tableLines.length > 0) {
+        currentTextLines.push(...tableLines);
+      }
+      tableLines = [];
+      inTable = false;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const isTableLine = line.trim().startsWith('|') && line.trim().endsWith('|');
+
+      if (isTableLine) {
+        if (!inTable) {
+          flushText();
+          inTable = true;
+        }
+        tableLines.push(line);
+      } else {
+        if (inTable) {
+          flushTable();
+        }
+        currentTextLines.push(line);
+      }
+    }
+
+    if (inTable) flushTable();
+    flushText();
+
+    return elements;
+  }, [text]);
+
+  return (
+    <div className="space-y-3 mt-2">
+      {parts.map((part, idx) => {
+        if (part.type === 'text') {
+          return (
+            <p key={idx} className="whitespace-pre-line text-sm leading-relaxed text-[#1A1714]">
+              {part.content}
+            </p>
+          );
+        }
+        return (
+          <div key={idx} className="my-3 overflow-x-auto border-2 border-[#1A1714] bg-white shadow-[3px_3px_0_0_#1A1714]">
+            <table className="min-w-full text-left text-xs sm:text-sm border-collapse">
+              <thead>
+                <tr className="border-b-2 border-[#1A1714] bg-[#1A1714] text-[#F7F1E3]">
+                  {part.headers.map((h, hi) => (
+                    <th key={hi} className="px-3 py-2 font-bold whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#1A1714]/15">
+                {part.rows.map((row, ri) => (
+                  <tr key={ri} className={ri % 2 === 1 ? 'bg-[#F7F1E3]/50' : 'bg-white'}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} className="px-3 py-2 text-[#1A1714] font-medium leading-normal whitespace-nowrap sm:whitespace-normal">
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function InteractiveExplanation({
   text,
   missedWords = [],
@@ -1460,7 +1563,7 @@ function InteractiveExplanation({
     const technicalTerms = [
       'TCP/IP', 'TCP', 'UDP', 'QUIC', 'HTTP/2', 'HTTP/3', 'HTTP', 'HTTPS',
       'Content-Type', 'Cookie', 'Header', 'Body', 'Status Code', 'REST', 'API',
-      'JSON', 'HTML', 'CSS', 'JavaScript', 'TypeScript', 'SSR', 'CSR', 'SQL',
+      'JSON', 'HTML', 'CSS', 'JavaScript', 'TypeScript', 'SSR', 'CSR', 'SSG', 'ISR', 'SQL',
       'DNS', 'SSL', 'TLS', 'MIME', 'POST', 'GET', 'PUT', 'DELETE',
       'useState', 'useEffect', 'props', 'Next.js', 'React', 'Supabase'
     ];
@@ -1478,10 +1581,8 @@ function InteractiveExplanation({
 
   return (
     <div>
-      {/* 本文は一切の枠線・ボタン装飾を排除し、自然で美しい文章として表示 */}
-      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#1A1714]">
-        {text}
-      </p>
+      {/* 本文（Markdownテーブルもスマホ対応で美しく描画） */}
+      <FormattedExplanationText text={text} />
 
       {/* 厳選された専門用語チップ（最大5個） */}
       {detectedKeywords.length > 0 && (
