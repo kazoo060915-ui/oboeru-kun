@@ -60,24 +60,47 @@ async function handleNotification(req: NextRequest) {
 
     const results: Record<string, string> = {};
 
-    // 1. LINE Notify 通知送信
-    const lineToken = process.env.LINE_NOTIFY_TOKEN;
-    if (lineToken) {
+    // 1. LINE 通知送信（Messaging API の push）
+    //
+    // 旧実装は LINE Notify（notify-api.line.me）を叩いていたが、
+    // LINE Notify は 2025-03-31 でサービス終了しており、あのエンドポイントは
+    // もう通らない。通知はこのアプリの心臓部なのに、失敗は results に
+    // 記録されるだけで誰の目にも触れず、静かに死んでいた。
+    //
+    // 移行先は Messaging API。LINE Developers でチャネルを作り、
+    //   LINE_CHANNEL_ACCESS_TOKEN … チャネルアクセストークン（長期）
+    //   LINE_USER_ID              … 送信先のユーザーID（自分のID）
+    // を設定する。どちらか欠けていれば skip。
+    const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+    const lineUserId = process.env.LINE_USER_ID;
+    if (lineToken && lineUserId) {
       try {
-        const lineRes = await fetch('https://notify-api.line.me/api/notify', {
+        const lineRes = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json',
             Authorization: `Bearer ${lineToken}`,
           },
-          body: new URLSearchParams({ message: messageText }),
+          body: JSON.stringify({
+            to: lineUserId,
+            messages: [{ type: 'text', text: messageText }],
+          }),
         });
-        results.line = lineRes.ok ? 'sent' : `failed (${lineRes.status})`;
+
+        if (lineRes.ok) {
+          results.line = 'sent';
+        } else {
+          // 原因（トークン失効・ID間違い・無料枠切れ）が本文に入るのでログに残す
+          const detail = await lineRes.text().catch(() => '');
+          console.error('LINE push failed:', lineRes.status, detail);
+          results.line = `failed (${lineRes.status})`;
+        }
       } catch (err: any) {
+        console.error('LINE push error:', err);
         results.line = `error: ${err.message}`;
       }
     } else {
-      results.line = 'skipped (LINE_NOTIFY_TOKEN not set)';
+      results.line = 'skipped (LINE_CHANNEL_ACCESS_TOKEN / LINE_USER_ID not set)';
     }
 
     // 2. Email 通知送信 (Resend API 等)
@@ -98,12 +121,37 @@ async function handleNotification(req: NextRequest) {
             text: messageText,
           }),
         });
-        results.email = emailRes.ok ? 'sent' : `failed (${emailRes.status})`;
+        if (emailRes.ok) {
+          results.email = 'sent';
+        } else {
+          const detail = await emailRes.text().catch(() => '');
+          console.error('Resend send failed:', emailRes.status, detail);
+          results.email = `failed (${emailRes.status})`;
+        }
       } catch (err: any) {
+        console.error('Resend send error:', err);
         results.email = `error: ${err.message}`;
       }
     } else {
       results.email = 'skipped (RESEND_API_KEY / NOTIFICATION_TO_EMAIL not set)';
+    }
+
+    // 1通も届いていないなら、それは成功ではない。
+    // 以前は常に success: true を返していたため、Vercel の Cron ログは
+    // ずっと緑のまま、実際には何ヶ月も通知が届いていない状態に気づけなかった。
+    const delivered = Object.values(results).some((r) => r === 'sent');
+    if (!delivered) {
+      console.error('Notification delivered to no channel:', results);
+      return NextResponse.json(
+        {
+          success: false,
+          error: '通知をどのチャネルにも送信できませんでした。環境変数を確認してください。',
+          dueCount: count,
+          message: messageText,
+          results,
+        },
+        { status: 502 }
+      );
     }
 
     return NextResponse.json({

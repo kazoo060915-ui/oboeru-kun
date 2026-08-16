@@ -35,6 +35,10 @@ create table if not exists public.user_settings (
   notification_channel text default 'both' check (notification_channel in ('line', 'email', 'both', 'none')),
   line_token text default '',
   email_address text default '',
+  -- 初期サンプル用語を投入済みかどうかの目印。
+  -- これが無いと「terms が0件＝初回」と誤判定し、単語帳を空にするたびに
+  -- サンプルが復活してしまう（migrations/002 参照）。
+  seeded_at timestamp with time zone,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -42,6 +46,10 @@ create table if not exists public.user_settings (
 create index if not exists idx_terms_next_review on public.terms(next_review_at);
 create index if not exists idx_terms_tag on public.terms(tag);
 create index if not exists idx_reviews_term_id on public.reviews(term_id);
+
+-- 同じ用語の二重登録を防ぐ（大文字小文字・前後空白は無視）
+create unique index if not exists idx_terms_unique_term
+  on public.terms (user_id, lower(trim(term)));
 
 -- ──────────────────────────────────────────
 -- Row Level Security

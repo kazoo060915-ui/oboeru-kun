@@ -49,7 +49,10 @@ export default function NotificationModal({ onClose }: NotificationModalProps) {
 
         <div className="mt-4 space-y-4 text-sm text-[#1A1714]">
           <p className="leading-relaxed">
-            毎朝その日の復習対象用語件数を <strong>LINE / メール</strong> で送信するパイプラインです。環境変数（`LINE_NOTIFY_TOKEN`, `RESEND_API_KEY`等）を設定することで自動連携されます。
+            毎朝その日の復習対象用語件数を <strong>LINE / メール</strong> で送信するパイプラインです。環境変数（LINE Messaging API の <code>LINE_CHANNEL_ACCESS_TOKEN</code> と <code>LINE_USER_ID</code>、メールの <code>RESEND_API_KEY</code> 等）を設定することで自動連携されます。
+          </p>
+          <p className="text-xs leading-relaxed text-[#1A1714]/70">
+            ※ 旧 LINE Notify は 2025年3月末でサービス終了したため、LINE 通知は Messaging API に移行済みです。下のテスト送信で <code>line: sent</code> が返るか必ず確認してください。
           </p>
 
           {message && (

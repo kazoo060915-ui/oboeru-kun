@@ -25,6 +25,7 @@ export default function Home() {
     correct: string;
     missed: string[];
     mission: string;
+    related?: string[];
   } | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -37,6 +38,15 @@ export default function Home() {
   const [sessionLimit, setSessionLimit] = useState<number>(3);
   const [sessionIndex, setSessionIndex] = useState<number>(1);
   const [sessionScores, setSessionScores] = useState<number[]>([]);
+
+  // セッション開始時の出題条件。2問目以降も同じ条件で出題するために保持する。
+  // これが無かった頃は「次のお題へ」が常に due（今日の復習）から引き直していたため、
+  // 先取り復習（due が0件の状態で始めるモード）に入ると2問目が引けず、
+  // ボタンを押しても何も起きなかった。
+  const [sessionForceAll, setSessionForceAll] = useState(false);
+  const [sessionTag, setSessionTag] = useState<string>('all');
+  // このセッションで既に出した用語。同じお題が繰り返し出るのを防ぐ。
+  const [askedIds, setAskedIds] = useState<string[]>([]);
 
   // 分野・講義回フィルター ('all' | 'due' | タグ名)
   const [selectedTag, setSelectedTag] = useState<string>('all');
@@ -195,24 +205,55 @@ export default function Home() {
     return filteredTerms.filter((t) => t.next_review_at <= today);
   }, [filteredTerms, selectedTag, due, today]);
 
-  const startQuiz = (forceAll?: boolean, targetTag?: string, resetSession: boolean = true) => {
-    const tagToUse = targetTag !== undefined ? targetTag : selectedTag;
+  interface StartQuizOptions {
+    /** 復習日を無視して全件から出題する（先取り復習・集中特訓） */
+    forceAll?: boolean;
+    /** 出題対象のタグ。省略時は現在選択中のタグ */
+    tag?: string;
+    /** true でセッションを最初から開始、false で現在のセッションの続き */
+    reset?: boolean;
+    /** 問題番号を進めるか。回答せずに用語を除外した場合は進めない */
+    advanceIndex?: boolean;
+  }
+
+  const startQuiz = ({
+    forceAll,
+    tag,
+    reset = true,
+    advanceIndex = true,
+  }: StartQuizOptions = {}) => {
+    // 継続時はセッション開始時の条件を引き継ぐ。ここを毎回 due から引き直していたのが
+    // 「先取り復習に入ると次のお題へが無反応」の原因だった。
+    const useForceAll = reset ? Boolean(forceAll) : sessionForceAll;
+    const tagToUse = reset ? (tag !== undefined ? tag : selectedTag) : sessionTag;
+
     let targetPool: Term[] = [];
 
-    if (tagToUse === 'all') {
-      targetPool = forceAll ? (terms || []) : due;
-    } else if (tagToUse === 'due') {
-      targetPool = due;
+    if (tagToUse === 'all' || tagToUse === 'due') {
+      targetPool = useForceAll ? terms || [] : due;
     } else {
       const tagTerms = (terms || []).filter((t) => getTermTag(t) === tagToUse);
-      targetPool = forceAll || tagTerms.every((t) => t.next_review_at > today)
-        ? tagTerms
-        : tagTerms.filter((t) => t.next_review_at <= today);
-      if (targetPool.length === 0) targetPool = tagTerms;
+      const dueTagTerms = tagTerms.filter((t) => t.next_review_at <= today);
+      targetPool = useForceAll || dueTagTerms.length === 0 ? tagTerms : dueTagTerms;
     }
 
-    if (targetPool.length === 0) return;
-    const randomTerm = targetPool[Math.floor(Math.random() * targetPool.length)];
+    if (targetPool.length === 0) {
+      setError('出題できる用語がありません。用語を追加するか、フィルターを変えてみてください。');
+      return;
+    }
+
+    // このセッションで既に出した用語を除く（同じお題が2回出るのを防ぐ）
+    const asked = reset ? [] : askedIds;
+    const unasked = targetPool.filter((t) => !asked.includes(t.id));
+
+    // 用語数がセッションの問題数より少ないと、途中で出し切ってしまう。
+    // 同じお題を繰り返すより、そこでセッションを終える方が納得感がある。
+    if (unasked.length === 0) {
+      setView(sessionScores.length > 0 ? 'session_summary' : 'home');
+      return;
+    }
+
+    const randomTerm = unasked[Math.floor(Math.random() * unasked.length)];
     setCurrent(randomTerm);
     setAnswer('');
     setResult(null);
@@ -221,11 +262,15 @@ export default function Home() {
     setError('');
     setShowHint(false);
 
-    if (resetSession) {
+    if (reset) {
+      setSessionForceAll(useForceAll);
+      setSessionTag(tagToUse);
+      setAskedIds([randomTerm.id]);
       setSessionIndex(1);
       setSessionScores([]);
     } else {
-      setSessionIndex((prev) => prev + 1);
+      setAskedIds([...asked, randomTerm.id]);
+      if (advanceIndex) setSessionIndex((prev) => prev + 1);
     }
 
     setView('quiz');
@@ -350,7 +395,10 @@ export default function Home() {
         if (terms) setTerms([data.term, ...terms]);
         alert(`「${termText}」を覚える君の単語帳に登録したで！次回から復習に出るよ。`);
       } else {
-        alert('すでに登録されているか、登録に失敗しました。');
+        // 以前は理由を問わず「すでに登録されているか、登録に失敗しました」と
+        // 出していたが、実際には重複チェック自体が無く、押すたびに増えていた。
+        // いまはサーバーが 409（重複）と 500（失敗）を区別して返す。
+        alert(data.error || '登録に失敗しました。');
       }
     } catch {
       alert('登録中にエラーが発生しました。');
@@ -414,12 +462,10 @@ export default function Home() {
 
       setTerms((prev) => (prev ? prev.filter((t) => t.id !== current.id) : prev));
 
-      // セッション中なら次の問題へ、またはセッション完了ならホームへ
-      if (sessionLimit > 0 && sessionIndex >= sessionLimit) {
-        setView('session_summary');
-      } else {
-        startQuiz(false, selectedTag, false);
-      }
+      // 回答せずに除外しただけなので、問題番号は進めずに差し替えのお題を出す
+      // （進めると「3問セッション」が実質2問で終わってしまう）。
+      // 出せる用語が尽きていれば startQuiz 側でサマリー／ホームへ抜ける。
+      startQuiz({ reset: false, advanceIndex: false });
     } catch {
       setError('用語の削除に失敗しました。');
     }
@@ -447,6 +493,11 @@ export default function Home() {
       setError('通信エラーで用語を削除できませんでした。');
     }
   };
+
+  // サマリーで使う「実際に答えた問題数」。
+  // sessionLimit をそのまま表示すると、全問モード（0）や、
+  // 用語を出し切って途中で終わった時に「0問セッション達成！」になってしまう。
+  const answeredCount = sessionScores.length;
 
   // レベル別集計
   const levelCounts = [0, 1, 2, 3, 4].map(
@@ -746,7 +797,7 @@ export default function Home() {
                 </div>
 
                 <button
-                  onClick={() => startQuiz(true, selectedTag, true)}
+                  onClick={() => startQuiz({ forceAll: true, tag: selectedTag, reset: true })}
                   disabled={filteredTerms.length === 0}
                   className="mt-5 w-full border-2 border-[#1A1714] bg-[#1A1714] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#332f2b]"
                 >
@@ -792,7 +843,7 @@ export default function Home() {
                 </div>
 
                 <button
-                  onClick={() => startQuiz(false, undefined, true)}
+                  onClick={() => startQuiz({ reset: true })}
                   className="mt-5 w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#9c2a20]"
                 >
                   ⚡ {sessionLimit > 0 ? `サクッと ${sessionLimit} 問復習する` : '全問チャレンジする'}
@@ -827,7 +878,7 @@ export default function Home() {
 
                 <div className="mt-5 flex gap-2">
                   <button
-                    onClick={() => startQuiz(true, undefined, true)}
+                    onClick={() => startQuiz({ forceAll: true, reset: true })}
                     className="flex-1 border-2 border-[#1A1714] bg-white px-3 py-2.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] transition-colors"
                   >
                     ⚡ 先取り復習する ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
@@ -1139,6 +1190,7 @@ export default function Home() {
               <InteractiveExplanation
                 text={result.correct}
                 missedWords={result.missed}
+                relatedWords={result.related}
                 onWordClick={(word) => askChat(`「${word}」ってどういう意味？`)}
                 onAddTerm={handleAddQuickTerm}
               />
@@ -1273,7 +1325,7 @@ export default function Home() {
                 </button>
               ) : (
                 <button
-                  onClick={() => startQuiz(false, selectedTag, false)}
+                  onClick={() => startQuiz({ reset: false })}
                   className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20]"
                 >
                   次のお題へ（{sessionIndex + 1}/{sessionLimit > 0 ? sessionLimit : '∞'}問）
@@ -1295,7 +1347,7 @@ export default function Home() {
             <div className="text-center">
               <span className="text-5xl">🏆</span>
               <h2 className="mt-2 font-serif text-2xl font-bold text-[#1A1714]">
-                {sessionLimit}問セッション達成！
+                {answeredCount}問セッション達成！
               </h2>
               <p className="font-mono text-xs font-bold text-[#8a6300]">
                 SESSION COMPLETE
@@ -1336,16 +1388,16 @@ export default function Home() {
                 </p>
               </div>
               <p className="mt-1 text-sm font-bold text-[#1A1714]/90">
-                「ええペースや！こうやって{sessionLimit}問ずつ隙間時間に回すのが一番記憶に残るんやで！この調子でいこ！」
+                「ええペースや！こうやって{answeredCount}問ずつ隙間時間に回すのが一番記憶に残るんやで！この調子でいこ！」
               </p>
             </div>
 
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => startQuiz(false, selectedTag, true)}
+                onClick={() => startQuiz({ forceAll: sessionForceAll, tag: sessionTag, reset: true })}
                 className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20] transition-colors"
               >
-                ⚡ もう1セットやる（+{sessionLimit}問）
+                ⚡ もう1セットやる（{sessionLimit > 0 ? `+${sessionLimit}問` : '全問'}）
               </button>
               <button
                 onClick={() => setView('home')}
@@ -1427,6 +1479,8 @@ export default function Home() {
 interface InteractiveExplanationProps {
   text: string;
   missedWords?: string[];
+  /** AIが解説中から選んだ関連専門用語。ハードコードの辞書より確実 */
+  relatedWords?: string[];
   onWordClick: (word: string) => void;
   onAddTerm?: (word: string) => void;
 }
@@ -1537,6 +1591,7 @@ function FormattedExplanationText({ text }: { text: string }) {
 function InteractiveExplanation({
   text,
   missedWords = [],
+  relatedWords = [],
   onWordClick,
   onAddTerm,
 }: InteractiveExplanationProps) {
@@ -1544,22 +1599,29 @@ function InteractiveExplanation({
   const detectedKeywords = React.useMemo(() => {
     const list: string[] = [];
 
-    // 1. missedWords（言えなかった重要キーワード）
-    missedWords.forEach((m) => {
-      const clean = m.replace(/[()（）=＝].*$/, '').trim();
+    const push = (raw: string) => {
+      const clean = raw.replace(/[()（）=＝].*$/, '').trim();
       if (
         clean &&
         clean.length >= 2 &&
         clean.length <= 15 &&
         !clean.includes(' ') &&
         !['からあげ', 'お弁当', '寿司', '仕組み', '本質', 'メリット'].some((ng) => clean.includes(ng)) &&
-        !list.includes(clean)
+        !list.some((existing) => existing.toLowerCase() === clean.toLowerCase())
       ) {
         list.push(clean);
       }
-    });
+    };
 
-    // 2. 代表的なIT・Web専門用語・プロトコル名のみマッチ（大文字小文字対応）
+    // 1. missedWords（言えなかった重要キーワード）
+    missedWords.forEach(push);
+
+    // 2. AIが解説中から選んだ関連用語。
+    //    以前は下のハードコード辞書40語だけが頼りで、そこに載っていない用語
+    //    （＝これから習うもののほとんど）は1つもチップにならなかった。
+    relatedWords.forEach(push);
+
+    // 3. 保険：代表的なIT・Web専門用語・プロトコル名のみマッチ（大文字小文字対応）
     const technicalTerms = [
       'TCP/IP', 'TCP', 'UDP', 'QUIC', 'HTTP/2', 'HTTP/3', 'HTTP', 'HTTPS',
       'Content-Type', 'Cookie', 'Header', 'Body', 'Status Code', 'REST', 'API',
@@ -1577,7 +1639,7 @@ function InteractiveExplanation({
 
     // 最大5個までに厳選
     return list.slice(0, 5);
-  }, [text, missedWords]);
+  }, [text, missedWords, relatedWords]);
 
   return (
     <div>

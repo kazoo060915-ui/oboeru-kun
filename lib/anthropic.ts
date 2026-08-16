@@ -100,16 +100,20 @@ function stripMarkdownSymbols(text: string): string {
 function cleanJsonText(rawText: string): string {
   const textWithoutCodeBlocks = rawText.replace(/```json|```/g, '').trim();
   const jsonMatch = textWithoutCodeBlocks.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  let jsonStr = jsonMatch ? jsonMatch[0].trim() : textWithoutCodeBlocks;
-  return jsonStr;
+  return jsonMatch ? jsonMatch[0].trim() : textWithoutCodeBlocks;
 }
 
-// 生の改行や特殊文字が含まれていても安全にJSONパースする関数
-function safeParseJson<T>(rawText: string, fallback: T): T {
+// 生の改行や特殊文字が含まれていても安全にJSONパースする関数。
+//
+// 失敗時は null を返す。以前はここで「それらしいダミー結果」を返していたが、
+// 呼び出し側がそれを本物の採点として DB に書き込んでいたため、
+// パースに失敗しただけで用語が偽の点数で昇格していた。
+// 判断は呼び出し側に委ねる（採点は捨てる、抽出は空配列、など）。
+function safeParseJson<T>(rawText: string): T | null {
   try {
     const cleaned = cleanJsonText(rawText);
     return JSON.parse(cleaned) as T;
-  } catch (firstErr) {
+  } catch {
     try {
       // 生改行が含まれている場合の補正処理
       const cleaned = cleanJsonText(rawText);
@@ -120,7 +124,7 @@ function safeParseJson<T>(rawText: string, fallback: T): T {
       return JSON.parse(sanitized) as T;
     } catch (secondErr) {
       console.error('safeParseJson failed. Raw text:', rawText, 'Error:', secondErr);
-      return fallback;
+      return null;
     }
   }
 }
@@ -131,6 +135,19 @@ export interface GradeResult {
   correct: string;
   missed: string[];
   mission: string;
+  /** 解説中に出てきた、生徒が追加で聞きたくなりそうな専門用語（最大5個） */
+  related: string[];
+}
+
+/**
+ * 採点が成立しなかったことを表すエラー。
+ * 呼び出し側（Route Handler）はこれを受けたら DB を一切更新してはいけない。
+ */
+export class GradeUnavailableError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'GradeUnavailableError';
+  }
 }
 
 // ──────────────────────────────────────────
@@ -204,6 +221,7 @@ ${userName}が自分の言葉で説明した内容: ${body}
   "tsukkomi": "あなたのキャラクターらしい愛のある一言コメント（1〜2文）。${userName}の回答内容を具体的に拾い（『${userName}、○○って言えたのは素晴らしい！けど△△が惜しかったな！』等）、上記のスコア帯に応じた温度感で突っ込む",
   "correct": "【技術的正体・分類】＋【語源・正式名称】＋【日常の例え・なぜ使うか】＋【実際の有名サイトでの使われ方（AmazonやX等）】＋【一生忘れない覚え方・比較表】＋【末尾の質問誘導セリフ】の充実構成で、初学者でも一発で腑に落ちるようにあなたのキャラクターの口調で丁寧に解説（5〜8文程度）。最後は必ず『これで分かったか、${userName}？〇〇について分からんかったら下のチャットでなんでも聞いてや！』と${userName}に質問を促す言葉で締めくくる。",
   "missed": ["生徒の説明に足りなかった重要キーワードを最大3つ。生徒が既に言えていた言葉は絶対に含めない。生徒が(わからん)の場合は用語の核となるキーワードを入れる"],
+  "related": ["上のcorrect解説の中で実際に使った専門用語のうち、${userName}が『これ何？』と追加で聞きたくなりそうなものを最大5つ。IT/Web/AIの専門用語・プロトコル名・ライブラリ名のみ（例: HTTP, useState, レンダリング）。日常語や例え話の言葉（お弁当、宅配便、仕組み、メリット等）は絶対に入れない。該当が無ければ空配列"],
   "mission": "今すぐ30秒〜3分で手を動かして実感できる超具体的なミニ課題を1つ。『Macのターミナルやお使いのコマンド画面で○○を叩く』『ブラウザで○○を開いて検索・検証する』『手元のエディタやメモで○○を確認する』など、特定のソフト（VS Code等）の新規インストールを強制せず、お使いのMac/PC環境ですぐ手軽に試せるアクションを指定する。抽象的な『調べてみよう』は禁止"
 }`;
 }
@@ -266,33 +284,55 @@ export async function gradeAnswer(
   const body = userAnswer.trim() || '(わからん)';
   const prompt = buildGradePrompt(term, note, body, coach, userName);
 
+  // APIキー未設定＝ローカルでのデモ実行。ここだけはダミー結果を返す。
+  // 実行時エラー（通信断・レート制限・パース失敗）で同じことをすると、
+  // 答えていない用語に偽の点数が付いて復習間隔が伸びてしまうため、
+  // 以降はすべて例外として投げ、呼び出し側に DB を触らせない。
   if (!anthropic) {
     return buildFallbackGradeResult(term, body, coach, userName);
   }
 
+  let text: string;
   try {
     const response = await anthropic.messages.create({
       model: MODEL_ID,
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
     });
-
-    const text = extractText(response.content);
-    const fallback = buildFallbackGradeResult(term, body, coach, userName);
-    const parsed = safeParseJson<GradeResult>(text, fallback);
-
-    // ** 記号を綺麗に除去して安全に返却
-    return {
-      score: Math.min(100, Math.max(0, Number(parsed.score) || 0)),
-      tsukkomi: stripMarkdownSymbols(parsed.tsukkomi || fallback.tsukkomi),
-      correct: stripMarkdownSymbols(parsed.correct || fallback.correct),
-      missed: Array.isArray(parsed.missed) ? parsed.missed.map((m) => stripMarkdownSymbols(m)) : fallback.missed,
-      mission: stripMarkdownSymbols(parsed.mission || fallback.mission),
-    };
+    text = extractText(response.content);
   } catch (err) {
-    console.error('API or JSON Parse error, fallback activated:', err);
-    return buildFallbackGradeResult(term, body, coach, userName);
+    console.error('Anthropic grade API error:', err);
+    throw new GradeUnavailableError(
+      'AIの採点サーバーに繋がらんかった。少し待ってもう一回「答える」を押してみて。',
+      { cause: err }
+    );
   }
+
+  const parsed = safeParseJson<Partial<GradeResult>>(text);
+  const score = Number(parsed?.score);
+
+  // score が数値として取れない＝採点が成立していない。
+  // 「とりあえず0点」で保存すると、正しく答えた用語がレベル0に落ちるので投げる。
+  if (!parsed || !Number.isFinite(score)) {
+    console.error('Grade response was not usable. Raw text:', text);
+    throw new GradeUnavailableError(
+      'AIの返事がうまく読み取れんかった。もう一回「答える」を押してみて。'
+    );
+  }
+
+  const fallback = buildFallbackGradeResult(term, body, coach, userName);
+
+  // ** 記号を綺麗に除去して安全に返却
+  return {
+    score: Math.min(100, Math.max(0, Math.round(score))),
+    tsukkomi: stripMarkdownSymbols(parsed.tsukkomi || fallback.tsukkomi),
+    correct: stripMarkdownSymbols(parsed.correct || fallback.correct),
+    missed: Array.isArray(parsed.missed) ? parsed.missed.map((m) => stripMarkdownSymbols(m)) : [],
+    mission: stripMarkdownSymbols(parsed.mission || fallback.mission),
+    related: Array.isArray(parsed.related)
+      ? parsed.related.map((r) => stripMarkdownSymbols(String(r))).filter(Boolean).slice(0, 5)
+      : [],
+  };
 }
 
 export interface ChatMessage {
@@ -364,6 +404,7 @@ function buildFallbackGradeResult(term: string, body: string, coach: CoachType =
       correct: correctText,
       missed: [term, '仕組み'],
       mission: `Macのターミナルやお使いのエディタ・フォルダ内で「${term}」を検索してみよう！プロジェクト内のどこで使われているか1箇所見つけるだけでOK！`,
+      related: [],
     };
   }
 
@@ -379,6 +420,7 @@ function buildFallbackGradeResult(term: string, body: string, coach: CoachType =
     correct: correctText,
     missed: [term, '本質', 'メリット'],
     mission: `手元のMacのターミナルやお使いのエディタを開いて「${term}」が使われているファイルを1つ開き、その周辺を声に出して読んでみよう！`,
+    related: [],
   };
 }
 
@@ -459,10 +501,30 @@ ${truncated}`;
     messages: [{ role: 'user', content: prompt }],
   });
 
-  const rawText = extractText(response.content) || '[]';
-  const cleaned = rawText.replace(/```json|```/g, '').trim();
+  return parseExtractedTerms(extractText(response.content));
+}
 
-  return JSON.parse(cleaned) as ExtractedTerm[];
+/**
+ * 抽出結果のJSON配列を安全に取り出す。
+ *
+ * 以前は生の JSON.parse だったため、AIが「はい、抽出しました！」等の
+ * 前置きを1文添えただけでファイル取込が500エラーになっていた。
+ * 採点と同じ補正パーサを通し、それでも駄目なら空配列（＝「見つからへんかった」表示）に倒す。
+ */
+function parseExtractedTerms(rawText: string): ExtractedTerm[] {
+  const parsed = safeParseJson<unknown>(rawText || '[]');
+  if (!Array.isArray(parsed)) {
+    console.error('Extract response was not a JSON array. Raw text:', rawText);
+    return [];
+  }
+
+  return parsed
+    .filter((t): t is { term?: unknown; note?: unknown } => Boolean(t) && typeof t === 'object')
+    .map((t) => ({
+      term: stripMarkdownSymbols(String(t.term ?? '')),
+      note: stripMarkdownSymbols(String(t.note ?? '')),
+    }))
+    .filter((t) => t.term.length > 0);
 }
 
 /**
@@ -529,8 +591,5 @@ JSON配列のみを出力してください。画像に専門用語が含まれ�
     ],
   });
 
-  const rawText = extractText(response.content) || '[]';
-  const cleaned = rawText.replace(/```json|```/g, '').trim();
-
-  return JSON.parse(cleaned) as ExtractedTerm[];
+  return parseExtractedTerms(extractText(response.content));
 }

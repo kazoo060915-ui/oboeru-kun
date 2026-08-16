@@ -16,6 +16,48 @@ const buildDefaultSeed = (): Omit<Term, 'id'>[] => [
   { user_id: 'default_user', term: 'コンテキストウィンドウ', note: 'AIが一度に読める量', level: 0, next_review_at: todayStr(), last_score: null },
 ];
 
+const DEFAULT_USER = 'default_user';
+
+/**
+ * 初期シードを「まだ一度も入れていない」かどうか。
+ *
+ * 以前は「terms が0件なら初回」と判定していたため、自分で登録した用語を
+ * 全部整理して0件にした瞬間、次のリロードで useState / useEffect / props …
+ * が8件また生えてきて、永久に空にできなかった。
+ * user_settings.seeded_at を実際の目印として使う。
+ *
+ * 判定できないとき（マイグレーション未適用など）は「シード済み」に倒す。
+ * 勝手に用語が復活する方が、シードが出ないことより害が大きい。
+ */
+async function hasSeededBefore(): Promise<boolean> {
+  if (!supabase) return true;
+
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('seeded_at')
+    .eq('user_id', DEFAULT_USER)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to read seed marker (treating as already seeded):', error);
+    return true;
+  }
+
+  return Boolean(data?.seeded_at);
+}
+
+async function markSeeded(): Promise<void> {
+  if (!supabase) return;
+
+  const { error } = await supabase
+    .from('user_settings')
+    .upsert({ user_id: DEFAULT_USER, seeded_at: new Date().toISOString() }, { onConflict: 'user_id' });
+
+  if (error) {
+    console.error('Failed to write seed marker:', error);
+  }
+}
+
 export async function GET(req: NextRequest) {
   const denied = requireAuth(req);
   if (denied) return denied;
@@ -31,15 +73,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '用語の読み込みに失敗しました。' }, { status: 500 });
     }
 
-    // 初回テーブル作成直後でデータが0件の場合、初期シードを自動登録
-    if (!data || data.length === 0) {
+    // 本当の初回（まだ一度もシードしていない）のときだけ初期シードを登録する
+    if ((!data || data.length === 0) && !(await hasSeededBefore())) {
       const { data: seeded, error: seedError } = await supabase
         .from('terms')
         .insert(buildDefaultSeed())
         .select();
 
       if (!seedError && seeded) {
+        await markSeeded();
         return NextResponse.json({ terms: seeded, isSupabase: true });
+      }
+
+      if (seedError) {
+        console.error('Supabase seed terms error:', seedError);
       }
     }
 
@@ -63,7 +110,7 @@ export async function POST(req: NextRequest) {
     }
 
     const newTermData = {
-      user_id: 'default_user',
+      user_id: DEFAULT_USER,
       term: term.trim(),
       note: (note || '').trim(),
       tag: (tag || '').trim(),
@@ -73,6 +120,31 @@ export async function POST(req: NextRequest) {
     };
 
     if (isSupabaseConfigured && supabase) {
+      // 重複チェック。以前は無く、解説画面の「＋追加」を2回押すと
+      // 同じ用語が2件登録され、復習キューに同じお題が並んでいた。
+      // ilike をワイルドカード無しで使う＝大文字小文字を無視した完全一致。
+      // ただし用語名自体に含まれる _ と % は LIKE のワイルドカードとして
+      // 解釈されてしまうため（user_id が userXid に一致するなど）、
+      // 別物を「登録済み」と誤判定しないようエスケープする。
+      const likePattern = newTermData.term.replace(/[\\%_]/g, (c: string) => `\\${c}`);
+      const { data: existing, error: dupCheckError } = await supabase
+        .from('terms')
+        .select('id, term')
+        .ilike('term', likePattern)
+        .limit(1);
+
+      if (dupCheckError) {
+        console.error('Supabase duplicate check error:', dupCheckError);
+        return NextResponse.json({ error: '用語の追加に失敗しました。' }, { status: 500 });
+      }
+
+      if (existing && existing.length > 0) {
+        return NextResponse.json(
+          { error: `「${existing[0].term}」はもう単語帳に入ってるで！` },
+          { status: 409 }
+        );
+      }
+
       const { data, error } = await supabase
         .from('terms')
         .insert(newTermData)

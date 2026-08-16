@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_COOKIE, verifyPasscode, isAuthenticated, getExpectedToken } from '@/lib/auth';
+import { hitRateLimit, clearRateLimit, clientKey } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,6 +9,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'サーバー設定が不完全です。' },
         { status: 500 }
+      );
+    }
+
+    // パスコードは短い1本の文字列なので、制限が無いと総当たりが素通りする。
+    // 10分あたり5回まで（lib/rate-limit.ts に制約を明記）。
+    const key = clientKey(req.headers);
+    const limit = hitRateLimit(key);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `アクセスコードの入力が多すぎます。${Math.ceil(limit.retryAfterSec / 60)}分ほど待ってから試してください。`,
+        },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSec) } }
       );
     }
 
@@ -23,6 +38,9 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    // 正しく入れた人を巻き込まないよう、成功したら失敗回数を捨てる
+    clearRateLimit(key);
 
     const response = NextResponse.json({ success: true });
     response.cookies.set(AUTH_COOKIE, token, {
