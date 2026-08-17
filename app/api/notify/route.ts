@@ -115,7 +115,13 @@ async function handleNotification(req: NextRequest) {
             Authorization: `Bearer ${resendApiKey}`,
           },
           body: JSON.stringify({
-            from: process.env.NOTIFICATION_FROM_EMAIL || 'oboeru@resend.dev',
+            // 既定値は onboarding@resend.dev でなければならない。
+            // Resend は検証済みドメイン以外からの送信を拒否するので、
+            // 以前の既定値 oboeru@resend.dev では 100% 失敗していた
+            // （resend.dev で使えるのは onboarding@ の1アドレスだけ。
+            //   その場合の宛先は Resend に登録した自分のアドレスに限られる）。
+            // 独自ドメインを Resend で検証したら NOTIFICATION_FROM_EMAIL で上書きする。
+            from: process.env.NOTIFICATION_FROM_EMAIL || 'onboarding@resend.dev',
             to: [toEmail],
             subject: `【覚える君】今日の復習(${count}件)`,
             text: messageText,
