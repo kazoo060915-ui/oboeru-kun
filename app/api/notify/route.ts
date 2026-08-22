@@ -50,12 +50,18 @@ async function handleNotification(req: NextRequest) {
     const count = dueTerms.length;
     let messageText = '';
 
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : 'https://oboeru-kun.vercel.app');
+
     if (count === 0) {
-      messageText = '【覚える君】今日の復習用語はあらへんよ！全勝中や、素晴らしい！';
+      messageText = `【覚える君】今日の復習用語はあらへんよ！全勝中や、素晴らしい！\n\n▼ アプリを開く\n${appUrl}`;
     } else {
       const samples = dueTerms.slice(0, 2).map((t) => `「${t.term}」`).join('と');
       const extra = count > 2 ? ` ほか計${count}件` : '';
-      messageText = `【覚える君】おつかれさま！今日は${count}件の復習があるで。${samples}${extra}、覚えてる？隙間時間にパパッと答えてみよう！`;
+      messageText = `【覚える君】おつかれさま！今日は${count}件の復習があるで。${samples}${extra}、覚えてる？隙間時間にパパッと答えてみよう！\n\n▼ 今すぐ復習する\n${appUrl}`;
     }
 
     const results: Record<string, string> = {};
