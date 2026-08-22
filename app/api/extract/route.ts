@@ -19,6 +19,39 @@ const IMAGE_MEDIA_TYPE_MAP: Record<string, ImageMediaType> = {
   '.gif': 'image/gif',
 };
 
+/**
+ * HTML から本文テキストだけを取り出す。
+ *
+ * 以前は .html/.htm をそのまま AI に渡していたため、<style> の CSS や
+ * class 属性だらけのタグが文字数を食い潰していた。教材HTMLは
+ * 10KB近いCSSを持つことが珍しくなく、その状態で先頭30000文字に
+ * 切り詰めると、本文は最初の1〜2レッスン分しか AI に届かない
+ * （＝それ以降の用語は「見つからなかった」のではなく、一度も読まれていない）。
+ */
+function htmlToText(html: string): string {
+  return html
+    // スクリプト・スタイル・コメントは中身ごと落とす
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    // ブロック要素の切れ目は改行にして、文の連結を防ぐ
+    .replace(/<\/(p|div|li|tr|h[1-6]|section|article|td|th)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    // 残りのタグを除去
+    .replace(/<[^>]+>/g, ' ')
+    // 主要なHTMLエンティティを復元
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    // 空白・空行を圧縮
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n\s*\n+/g, '\n\n')
+    .trim();
+}
+
 export async function POST(req: NextRequest) {
   const denied = requireAuth(req);
   if (denied) return denied;
@@ -108,7 +141,11 @@ export async function POST(req: NextRequest) {
 
     // ─── テキスト系 ─────────────────────────────
     else {
-      const text = await file.text();
+      const raw = await file.text();
+      // HTML はタグ・CSS を落としてから渡す（そうしないと文字数の大半を
+      // CSS と class 属性が占め、本文が切り詰めに巻き込まれる）
+      const text = ext === '.html' || ext === '.htm' ? htmlToText(raw) : raw;
+
       if (!text.trim()) {
         return NextResponse.json(
           { error: 'ファイルの中身が空やで。内容があるファイルを選んでな。' },
