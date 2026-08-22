@@ -158,6 +158,18 @@ export default function Home() {
     }
   }, [view, sessionScores]);
 
+  // 復習セッション中のスワイプバック／戻るボタン対策。
+  // 以前は view が useState だけで履歴に乗らず、通勤中に1問だけ答えようとして
+  // ブラウザの戻るジェスチャを使うと、そのままアプリごと閉じていた
+  // （記録もスケジュールも汚さず離脱する手段が実質存在しなかった）。
+  // セッション開始時に履歴を1つ積んでおき、popstate（戻る操作）が来たら
+  // ページ遷移そのものはブラウザに任せつつ、アプリの状態だけホームへ戻す。
+  useEffect(() => {
+    const onPopState = () => setView('home');
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   const today = todayStr();
   const due = (terms || []).filter((t) => t.next_review_at <= today);
 
@@ -272,6 +284,11 @@ export default function Home() {
       setAskedIds([randomTerm.id]);
       setSessionIndex(1);
       setSessionScores([]);
+      // セッション開始時に履歴を1つ積む。popstate ハンドラ（上のuseEffect）と
+      // 対になっており、これが無いと戻るジェスチャがアプリの外まで抜けてしまう。
+      if (typeof window !== 'undefined') {
+        window.history.pushState({ oboeruSession: true }, '');
+      }
     } else {
       setAskedIds([...asked, randomTerm.id]);
       if (advanceIndex) setSessionIndex((prev) => prev + 1);
@@ -299,6 +316,11 @@ export default function Home() {
           answer: textToSubmit,
           termId: current.id,
           currentLevel: current.level,
+          currentNextReviewAt: current.next_review_at,
+          // 「先取り復習」「集中特訓」で、まだ復習日が来ていない用語を前倒しで
+          // 解いた場合はサーバー側に伝える。忘却曲線のスケジュールを
+          // 前倒し操作で壊さないための判定に使う。
+          isAheadOfSchedule: current.next_review_at > today,
           coach,
           userName,
         }),
@@ -1103,7 +1125,13 @@ export default function Home() {
             )}
 
             <div className="flex items-center justify-between">
-              <p className="font-mono text-xs tracking-widest text-[#1A1714]/60">お題</p>
+              <button
+                onClick={() => setView('home')}
+                title="この用語には答えず、記録を汚さずにホームへ戻る"
+                className="font-mono text-xs tracking-widest text-[#1A1714]/60 hover:text-[#1A1714] hover:underline"
+              >
+                ← 中断する
+              </button>
               <div className="flex items-center gap-2">
                 <span className="border border-[#1A1714] bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-[#1A1714]">
                   🏷️ {getTermTag(current)}

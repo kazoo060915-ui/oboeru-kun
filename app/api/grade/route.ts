@@ -11,7 +11,17 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const { term, note, answer, termId, currentLevel = 0, coach = 'osaka', userName = 'あなた' } = await req.json();
+    const {
+      term,
+      note,
+      answer,
+      termId,
+      currentLevel = 0,
+      currentNextReviewAt,
+      isAheadOfSchedule = false,
+      coach = 'osaka',
+      userName = 'あなた',
+    } = await req.json();
 
     if (!term) {
       return NextResponse.json({ error: 'Term is required' }, { status: 400 });
@@ -19,17 +29,20 @@ export async function POST(req: NextRequest) {
 
     const useDb = Boolean(isSupabaseConfigured && supabase && termId);
 
-    // 1. Anthropic API で採点。DBを使う場合は、レベル計算の基準にする「今のレベル」も
-    //    並行して取得する。クライアントが送ってくる currentLevel は自己申告値で、
-    //    複数端末での同時操作や改ざんに対して信頼できない
+    // 1. Anthropic API で採点。DBを使う場合は、レベル計算の基準にする「今のレベル・
+    //    今の次回復習日」も並行して取得する。クライアントが送ってくる currentLevel は
+    //    自己申告値で、複数端末での同時操作や改ざんに対して信頼できない
     //    （2.5 のような不正値だと INTERVALS[lvl] が undefined になり日付計算が NaN で壊れる、
     //    4 を送り続ければ1回の高得点で最長間隔まで飛べる、等）。
     const [result, dbLevelRes] = await Promise.all([
       gradeAnswer(term, note || '', answer || '', normalizeCoach(coach), userName?.trim() || 'あなた'),
-      useDb ? supabase!.from('terms').select('level').eq('id', termId).eq('user_id', 'default_user').single() : Promise.resolve(null),
+      useDb
+        ? supabase!.from('terms').select('level, next_review_at').eq('id', termId).eq('user_id', 'default_user').single()
+        : Promise.resolve(null),
     ]);
 
     let baseLevel: number;
+    let existingNextReviewAt: string | null = null;
     if (useDb) {
       if (!dbLevelRes || dbLevelRes.error || !dbLevelRes.data) {
         console.error('Supabase fetch term level before grading failed:', dbLevelRes?.error);
@@ -39,10 +52,12 @@ export async function POST(req: NextRequest) {
         );
       }
       baseLevel = dbLevelRes.data.level;
+      existingNextReviewAt = dbLevelRes.data.next_review_at;
     } else {
       // Supabase 未設定（デモモード）等、DB を持たない経路のみクライアント申告値を使う。
       // その場合も範囲外・非整数は捨てて 0 に倒す。
       baseLevel = Number.isInteger(currentLevel) && currentLevel >= 0 && currentLevel < INTERVALS.length ? currentLevel : 0;
+      existingNextReviewAt = typeof currentNextReviewAt === 'string' ? currentNextReviewAt : null;
     }
 
     // 2. レベルおよび次回復習日の計算
@@ -54,7 +69,17 @@ export async function POST(req: NextRequest) {
         ? baseLevel
         : 0;
 
-    const nextReviewAt = addDaysStr(INTERVALS[lvl]);
+    let nextReviewAt = addDaysStr(INTERVALS[lvl]);
+
+    // 「先取り復習」「集中特訓」は、まだ復習日が来ていない用語を forceAll で
+    // 前倒しして出題する。以前はこの経路も通常の復習と全く同じ計算式を通していたため、
+    // 復習日を無視して答えるほど間隔が伸び、忘却曲線に沿ってシステム側がタイミングを
+    // 管理するという設計思想が崩れていた（集中特訓を数回まわすと全用語がLv.4/30日後に
+    // 到達してしまう）。前倒しで解いた場合は、計算結果が元の予定日より前（＝間隔を
+    // 縮める方向）のときだけ採用し、元の予定日より後ろに延ばすことはしない。
+    if (isAheadOfSchedule && existingNextReviewAt && existingNextReviewAt < nextReviewAt) {
+      nextReviewAt = existingNextReviewAt;
+    }
 
     // 3. Supabaseが使える場合はDBの更新・履歴追加
     if (useDb) {
