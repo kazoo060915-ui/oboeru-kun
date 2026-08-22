@@ -245,37 +245,53 @@ export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     let id = searchParams.get('id');
+    // 棚卸し画面からの一括削除用。1件ずつリクエストを投げると
+    // 数十件の削除で数十往復することになるため、ids でまとめて受ける。
+    let ids: string[] | null = null;
 
     if (!id) {
       try {
         const body = await req.json();
         id = body.id;
+        if (Array.isArray(body.ids)) {
+          ids = body.ids.filter((v: unknown): v is string => typeof v === 'string' && v.length > 0);
+        }
       } catch {
         // bodyが空の場合は無視
       }
     }
 
-    if (!id) {
+    const targets = ids && ids.length > 0 ? ids : id ? [id] : [];
+
+    if (targets.length === 0) {
       return NextResponse.json({ error: 'Term ID is required' }, { status: 400 });
     }
 
     if (isSupabaseConfigured && supabase) {
       // 関連するレビュー履歴も削除（Cascade設定がない場合の安全策）
-      await supabase.from('reviews').delete().eq('term_id', id);
+      await supabase.from('reviews').delete().in('term_id', targets);
 
-      const { error } = await supabase
+      const { data: deleted, error } = await supabase
         .from('terms')
         .delete()
-        .eq('id', id)
-        .eq('user_id', DEFAULT_USER);
+        .in('id', targets)
+        .eq('user_id', DEFAULT_USER)
+        .select('id');
 
       if (error) {
         console.error('Supabase delete term error:', error);
         return NextResponse.json({ error: '用語の削除に失敗しました。' }, { status: 500 });
       }
+
+      return NextResponse.json({
+        success: true,
+        id,
+        deletedIds: (deleted || []).map((d) => d.id),
+        deletedCount: (deleted || []).length,
+      });
     }
 
-    return NextResponse.json({ success: true, id });
+    return NextResponse.json({ success: true, id, deletedIds: targets, deletedCount: targets.length });
   } catch (error) {
     console.error('DELETE /api/terms failed:', error);
     return NextResponse.json({ error: '用語の削除に失敗しました。' }, { status: 500 });

@@ -533,6 +533,99 @@ const EXTRACT_CRITERIA = `## 抽出の判定基準（最重要）
 **迷ったら抽出しない。** これは毎日の復習キューに入る。
 数を埋めることより、1件も無駄を混ぜないことの方がはるかに重要。`;
 
+export interface TermAudit {
+  /** 対象の用語ID（terms.id） */
+  id: string;
+  /** 復習用語として残す価値があるか */
+  keep: boolean;
+  /** keep=false のときの理由（15字以内） */
+  reason: string;
+}
+
+/**
+ * 既に登録済みの用語を、抽出時と同じ基準で棚卸しする。
+ *
+ * 抽出プロンプトを厳しくしても既存の登録分は減らないため、
+ * 登録済みの用語を後から同じものさしで判定できるようにする。
+ * 判定するだけで削除はしない（何を消すかは必ずユーザーが決める）。
+ */
+export async function auditTerms(
+  terms: { id: string; term: string; note: string; tag?: string }[]
+): Promise<TermAudit[]> {
+  if (terms.length === 0) return [];
+
+  const list = terms
+    .map((t) => `- id: ${t.id}\n  用語: ${t.term}\n  メモ: ${t.note || '(なし)'}`)
+    .join('\n');
+
+  const prompt = `あなたは学習設計の専門家です。
+ある学習者の復習アプリに登録されている用語リストを棚卸しします。
+
+各用語について、「繰り返し復習して定着させる価値があるか」を判定してください。
+判定は下記の基準に厳密に従ってください。
+
+${EXTRACT_CRITERIA}
+
+## 判定のしかた
+- 基準の「⭕ 抽出してよいもの」に当てはまる → keep: true
+- 基準の「❌ 抽出してはいけないもの」に当てはまる → keep: false
+- keep: false の場合、reason に理由を15字以内で簡潔に書く
+  （例: 「講義の言い回し」「一般的な日本語」「行動フレーズ」「ツールの総称」）
+- keep: true の場合、reason は空文字 "" にする
+
+判断に迷った場合は keep: true にしてください（誤って消す方が害が大きいため）。
+
+## 出力形式
+入力された全ての用語について、JSON配列のみを出力してください。
+idは入力されたものをそのまま正確に転記すること。
+
+[
+  {"id": "入力されたid", "keep": true, "reason": ""},
+  {"id": "入力されたid", "keep": false, "reason": "講義の言い回し"}
+]
+
+## 棚卸し対象の用語リスト（全${terms.length}件）
+${list}`;
+
+  if (!anthropic) {
+    // APIキー未設定時は「全部残す」に倒す。判定できないことを理由に
+    // 用語が消える方向へ倒れてはいけない。
+    return terms.map((t) => ({ id: t.id, keep: true, reason: '' }));
+  }
+
+  const response = await anthropic.messages.create({
+    model: MODEL_ID,
+    max_tokens: 8000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  if (response.stop_reason === 'max_tokens') {
+    throw new Error('判定結果が長すぎて途中で切れました。対象を分割して再試行してください。');
+  }
+
+  const parsed = safeParseJson<unknown>(extractText(response.content) || '[]');
+  if (!Array.isArray(parsed)) {
+    console.error('Audit response was not a JSON array.');
+    throw new Error('判定結果を読み取れませんでした。もう一度試してください。');
+  }
+
+  const byId = new Map<string, TermAudit>();
+  for (const row of parsed) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as { id?: unknown; keep?: unknown; reason?: unknown };
+    const id = String(r.id ?? '');
+    if (!id) continue;
+    byId.set(id, {
+      id,
+      keep: r.keep !== false, // 明示的に false のときだけ削除候補
+      reason: stripMarkdownSymbols(String(r.reason ?? '')).slice(0, 30),
+    });
+  }
+
+  // 応答から漏れた用語は「残す」に倒す
+  return terms.map((t) => byId.get(t.id) ?? { id: t.id, keep: true, reason: '' });
+}
+
 export interface ExtractedTerm {
   term: string;
   note: string;

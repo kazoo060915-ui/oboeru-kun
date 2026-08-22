@@ -7,6 +7,7 @@ import MicButton from '@/components/MicButton';
 import AuthModal from '@/components/AuthModal';
 import NotificationModal from '@/components/NotificationModal';
 import FileImporter from '@/components/FileImporter';
+import TermAuditModal from '@/components/TermAuditModal';
 import EditTermModal from '@/components/EditTermModal';
 import { Term, getTermTag } from '@/lib/types';
 import { CoachType, COACH_LIST } from '@/lib/coach';
@@ -79,6 +80,7 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showImporter, setShowImporter] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
 
   // ユーザー名の初期読み込み
@@ -623,6 +625,16 @@ export default function Home() {
         />
       )}
 
+      {/* 単語帳の棚卸しモーダル */}
+      {showAudit && (
+        <TermAuditModal
+          onClose={() => setShowAudit(false)}
+          onDeleted={(deletedIds) => {
+            setTerms((prev) => (prev ? prev.filter((t) => !deletedIds.includes(t.id)) : prev));
+          }}
+        />
+      )}
+
       {/* 用語編集モーダル */}
       {editingTerm && (
         <EditTermModal
@@ -1010,6 +1022,13 @@ export default function Home() {
                     className="border border-[#B83227] bg-[#B83227]/10 px-2 py-1 font-mono text-xs font-bold text-[#B83227] hover:bg-[#B83227] hover:text-[#F7F1E3]"
                   >
                     📄 取込
+                  </button>
+                  <button
+                    onClick={() => setShowAudit(true)}
+                    title="復習する価値のない用語を見つけて整理する"
+                    className="border border-[#1A1714]/40 bg-white px-2 py-1 font-mono text-xs font-bold text-[#1A1714]/70 hover:bg-[#1A1714] hover:text-[#F7F1E3]"
+                  >
+                    🧹 棚卸し
                   </button>
                   <button
                     onClick={() => setView('add')}
