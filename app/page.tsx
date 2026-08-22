@@ -11,7 +11,7 @@ import EditTermModal from '@/components/EditTermModal';
 import { Term, getTermTag } from '@/lib/types';
 import { CoachType, COACH_LIST } from '@/lib/coach';
 import { todayStr } from '@/lib/date';
-import { INTERVALS } from '@/lib/constants';
+import { INTERVALS, SCORE_KEEP } from '@/lib/constants';
 import { triggerScoreEffects, triggerSessionCompleteEffects } from '@/lib/effects';
 
 export default function Home() {
@@ -27,6 +27,9 @@ export default function Home() {
     mission: string;
     related?: string[];
   } | null>(null);
+  // 表示中の result が「わからん」経由の申告かどうか。
+  // 正直に申告した人をシェイク・雨粒などの罰的演出で叩かないための判定に使う。
+  const [isWakaranResult, setIsWakaranResult] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -257,6 +260,7 @@ export default function Home() {
     setCurrent(randomTerm);
     setAnswer('');
     setResult(null);
+    setIsWakaranResult(false);
     setChat([]);
     setChatInput('');
     setError('');
@@ -282,6 +286,8 @@ export default function Home() {
     setError('');
 
     const textToSubmit = overrideAnswer !== undefined ? overrideAnswer : answer;
+    const wakaran = textToSubmit === '(わからん)';
+    setIsWakaranResult(wakaran);
 
     try {
       const res = await fetch('/api/grade', {
@@ -322,8 +328,9 @@ export default function Home() {
         setTerms(updatedTerms);
       }
 
-      // スコアに応じた演出を発火（80点以上は桜吹雪、40点未満はシェイク等）
-      triggerScoreEffects(data.result.score);
+      // スコアに応じた演出を発火（80点以上は桜吹雪、50点未満はシェイク等）。
+      // 「わからん」の正直申告は演出で罰さない。
+      triggerScoreEffects(data.result.score, wakaran);
 
       setView('result');
     } catch (err: any) {
@@ -402,6 +409,37 @@ export default function Home() {
       }
     } catch {
       alert('登録中にエラーが発生しました。');
+    }
+  };
+
+  // 初回ユーザー向けの「まずはこれで試す」用サンプル用語。
+  // 1タップで3件登録し、その場で1問回してもらうところまでを初回導線にする。
+  const SAMPLE_TERMS = [
+    { term: 'useState', note: 'Reactでコンポーネントの状態を持つためのフック', tag: 'サンプル' },
+    { term: 'API', note: 'アプリ同士がデータをやり取りするための窓口', tag: 'サンプル' },
+    { term: 'Git', note: 'コードの変更履歴を管理するツール', tag: 'サンプル' },
+  ];
+
+  const handleAddSampleTerms = async () => {
+    try {
+      const results = await Promise.all(
+        SAMPLE_TERMS.map((t) =>
+          fetch('/api/terms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(t),
+          }).then(async (r) => ({ ok: r.ok, body: await r.json() }))
+        )
+      );
+
+      const added = results.filter((r) => r.ok && r.body.term).map((r) => r.body.term);
+      if (added.length > 0) {
+        setTerms((prev) => (prev ? [...added, ...prev] : added));
+      }
+      // すぐに1問回してもらう（登録できた分だけで開始）
+      setTimeout(() => startQuiz({ forceAll: true, tag: 'all', reset: true }), 0);
+    } catch {
+      setError('サンプル用語の登録に失敗しました。もう一度試してください。');
     }
   };
 
@@ -752,7 +790,42 @@ export default function Home() {
             </div>
 
             {/* 復習・特訓状況カード */}
-            {selectedTag !== 'all' && selectedTag !== 'due' ? (
+            {terms.length === 0 ? (
+              // 初回ユーザー向けの空状態。
+              // 以前はここが「今日の復習はすべて完了！🎉」の完了カードに落ちてしまい、
+              // 何も登録していない人が祝われた上に、押せるボタンは
+              // 「出題できる用語がありません」というエラーを返していた。
+              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
+                <h3 className="font-serif text-xl font-bold text-[#1A1714]">
+                  まだ用語が1件もないで
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-[#1A1714]/80">
+                  覚える君は、説明を「読む」んやなくて「自分の言葉で書く」ことで記憶に残す復習コーチや。
+                  まずは覚えたい用語を1件登録してみて。
+                </p>
+
+                <div className="mt-5 flex flex-col gap-2">
+                  <button
+                    onClick={() => setShowImporter(true)}
+                    className="w-full border-2 border-[#1A1714] bg-[#1A1714] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#332f2b]"
+                  >
+                    📄 講義資料から一気に取り込む
+                  </button>
+                  <button
+                    onClick={() => setView('add')}
+                    className="w-full border-2 border-[#1A1714] bg-white px-4 py-2.5 text-sm font-bold transition hover:bg-[#1A1714]/5"
+                  >
+                    ✏️ 手で1つ入れてみる
+                  </button>
+                  <button
+                    onClick={handleAddSampleTerms}
+                    className="w-full border border-[#1A1714]/40 bg-transparent px-4 py-2 text-xs font-bold text-[#1A1714]/70 underline transition hover:text-[#1A1714]"
+                  >
+                    まずはサンプル用語で1問試してみる
+                  </button>
+                </div>
+              </div>
+            ) : selectedTag !== 'all' && selectedTag !== 'due' ? (
               // 選択された特定分野の集中特訓カード
               <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
                 <div className="flex items-center justify-between">
@@ -1139,11 +1212,12 @@ export default function Home() {
             {/* ツッコミ & 印鑑判子 */}
             <div
               className={`relative border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714] overflow-hidden ${
-                result.score < 40 ? 'shake-effect' : ''
+                result.score < SCORE_KEEP && !isWakaranResult ? 'shake-effect' : ''
               }`}
             >
-              {/* 低得点（40点未満）時のしとしと雨粒/涙エフェクト */}
-              {result.score < 40 && (
+              {/* 低得点（レベルリセットライン未満）時のしとしと雨粒/涙エフェクト。
+                  「わからん」の正直申告はここでは罰さない（設計思想：わからんも責めずに拾う）。 */}
+              {result.score < SCORE_KEEP && !isWakaranResult && (
                 <div className="pointer-events-none absolute inset-0 flex justify-around opacity-60 z-0">
                   <span className="rain-drop text-sm" style={{ animationDelay: '0s' }}>💧</span>
                   <span className="rain-drop text-xs" style={{ animationDelay: '0.4s' }}>💧</span>
@@ -1175,7 +1249,7 @@ export default function Home() {
                     極端に狭くなり、1行あたり数文字しか入らず縦長になっていた。
                     floatで文章側に回り込ませることで、判子を避けつつ全幅を使う。 */}
                 <div className="float-right ml-3 mb-1">
-                  <Stamp score={result.score} />
+                  <Stamp score={result.score} isWakaran={isWakaranResult} />
                 </div>
                 <p className="mt-4 font-serif text-xl font-bold leading-relaxed text-[#1A1714]">
                   「{result.tsukkomi}」

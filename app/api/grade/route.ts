@@ -4,7 +4,7 @@ import { normalizeCoach } from '@/lib/coach';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { requireAuth } from '@/lib/auth';
 import { addDaysStr } from '@/lib/date';
-import { INTERVALS } from '@/lib/constants';
+import { INTERVALS, SCORE_PROMOTE, SCORE_KEEP } from '@/lib/constants';
 
 export async function POST(req: NextRequest) {
   const denied = requireAuth(req);
@@ -29,9 +29,9 @@ export async function POST(req: NextRequest) {
     // 2. レベルおよび次回復習日の計算
     const score = result.score;
     const lvl =
-      score >= 80
+      score >= SCORE_PROMOTE
         ? Math.min(currentLevel + 1, INTERVALS.length - 1)
-        : score >= 50
+        : score >= SCORE_KEEP
         ? currentLevel
         : 0;
 

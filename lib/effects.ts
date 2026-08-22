@@ -1,13 +1,16 @@
 import confetti from 'canvas-confetti';
+import { SCORE_PROMOTE, SCORE_KEEP } from './constants';
 
 /**
  * 得点に応じたアニメーション効果を発火
+ * @param isWakaran 「わからん」経由の回答なら true。正直な自己申告を演出で罰さないよう、
+ *   低得点時のシェイク・雨粒（呼び出し側の JSX）と同様に紙吹雪も抑制する。
  */
-export function triggerScoreEffects(score: number) {
-  if (typeof window === 'undefined') return;
+export function triggerScoreEffects(score: number, isWakaran: boolean = false) {
+  if (typeof window === 'undefined' || isWakaran) return;
 
   // 🌸 80点以上（高得点・花丸）：和風の華やかな桜吹雪＆金銀吹雪
-  if (score >= 80) {
+  if (score >= SCORE_PROMOTE) {
     const end = Date.now() + 1.2 * 1000;
     const colors = ['#B83227', '#D9A441', '#FFB7C5', '#FFFFFF', '#E67E22'];
 
@@ -36,8 +39,11 @@ export function triggerScoreEffects(score: number) {
       }
     })();
   }
-  // ✨ 40〜79点（合格・まずまず）：中央からフワッと広がる星・金色の紙吹雪
-  else if (score >= 40) {
+  // ✨ 50〜79点（レベル維持ライン以上）：中央からフワッと広がる星・金色の紙吹雪
+  // 閾値はレベル維持ラインの SCORE_KEEP と揃える。以前は 40 点固定だったため
+  // 40〜49点（＝レベルは 0 にリセットされる）でも紙吹雪が舞い、
+  // 「祝福」と「降格」が同一フレームで衝突していた。
+  else if (score >= SCORE_KEEP) {
     confetti({
       particleCount: 40,
       spread: 60,
@@ -46,7 +52,7 @@ export function triggerScoreEffects(score: number) {
       scalar: 0.9,
     });
   }
-  // 💧 40点未満は confetti を出さず、UI側のシェイク＋雨粒エフェクト
+  // 💧 50点未満（＝レベル0リセット）は confetti を出さず、UI側のシェイク＋雨粒エフェクト
 }
 
 /**
