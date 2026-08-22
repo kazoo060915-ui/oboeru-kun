@@ -294,13 +294,26 @@ export async function gradeAnswer(
 
   let text: string;
   try {
+    // プロンプトは語源・語呂合わせ・比較表・日常の例え等を1回答に全部詰めろと
+    // 指示しており、日本語は1文字≒1トークン前後のため、以前の 1500 では
+    // 表付きの解説が途中で切れて JSON が閉じられず、答えたのに毎回
+    // 「AIの返事がうまく読み取れんかった」で捨てられることがあった。
     const response = await anthropic.messages.create({
       model: MODEL_ID,
-      max_tokens: 1500,
+      max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     });
+
+    if (response.stop_reason === 'max_tokens') {
+      console.error('Anthropic grade response was truncated at max_tokens. Raw text:', extractText(response.content));
+      throw new GradeUnavailableError(
+        'AIの解説が長すぎて途中で切れてもうた。もう一回「答える」を押してみて。'
+      );
+    }
+
     text = extractText(response.content);
   } catch (err) {
+    if (err instanceof GradeUnavailableError) throw err;
     console.error('Anthropic grade API error:', err);
     throw new GradeUnavailableError(
       'AIの採点サーバーに繋がらんかった。少し待ってもう一回「答える」を押してみて。',

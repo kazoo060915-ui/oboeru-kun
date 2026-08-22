@@ -63,9 +63,30 @@ export function clearRateLimit(key: string) {
   attempts.delete(key);
 }
 
-/** リクエスト元の識別子。プロキシ配下なので x-forwarded-for を優先する */
+/**
+ * リクエスト元の識別子。
+ *
+ * x-forwarded-for は「クライアント, プロキシ1, プロキシ2, ...」の順に
+ * 積まれるヘッダで、左端（クライアントが自称する値）は誰でも自由に
+ * 詐称できる。毎回ランダムな値を送られると、総当たりのたびに
+ * 別キー扱いになって回数制限が一度も効かない。
+ *
+ * Vercel は x-vercel-forwarded-for にプラットフォーム側で検出した
+ * 接続元を設定するため、あればそちらを優先する。無い場合は
+ * x-forwarded-for の右端（＝アプリに一番近い中継地点が付けた値）を使う。
+ * クライアントは自分より右には値を追記できないため、左端よりは詐称に強い
+ * （ただし Vercel 以外にリバースプロキシを重ねる構成では、その挙動を
+ * 別途確認すること）。
+ */
 export function clientKey(headers: Headers): string {
+  const vercelForwarded = headers.get('x-vercel-forwarded-for');
+  if (vercelForwarded) return vercelForwarded.split(',')[0].trim();
+
   const forwarded = headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
+  if (forwarded) {
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
+
   return headers.get('x-real-ip') || 'unknown';
 }
