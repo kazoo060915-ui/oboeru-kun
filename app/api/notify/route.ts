@@ -41,6 +41,7 @@ async function handleNotification(req: NextRequest) {
       const { data } = await supabase
         .from('terms')
         .select('term')
+        .eq('user_id', 'default_user')
         .lte('next_review_at', today);
       dueTerms = data || [];
     } else {

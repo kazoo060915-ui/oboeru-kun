@@ -593,7 +593,10 @@ export default function Home() {
             if (terms) {
               setTerms([...newTerms, ...terms]);
             }
-            setShowImporter(false);
+            // 以前はここで即座にモーダルを閉じていたため、FileImporter側で
+            // 「登録◯件 / 重複◯件 / 失敗◯件」の結果を表示しても
+            // 表示される前に画面が消えていた。ユーザーが結果を見てから
+            // 自分で「✕ 閉じる」を押すまでモーダルは開いたままにする。
           }}
         />
       )}

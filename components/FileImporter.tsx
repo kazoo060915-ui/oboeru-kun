@@ -40,6 +40,7 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+  const [registerResult, setRegisterResult] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 既存用語の正規化セット（高速ルックアップ用）
@@ -53,6 +54,7 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
 
     setError('');
     setMessage('');
+    setRegisterResult('');
     setExtractedTerms([]);
     setSelectedIds(new Set());
     setIsExtracting(true);
@@ -191,36 +193,65 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
   const deselectAll = () => setSelectedIds(new Set());
 
   const handleRegister = async () => {
-    const toRegister = extractedTerms.filter((_, i) => selectedIds.has(i));
+    const targetIdx = [...selectedIds];
+    const toRegister = targetIdx.map((i) => extractedTerms[i]);
     if (toRegister.length === 0) return;
 
     setIsRegistering(true);
     setError('');
+    setRegisterResult('');
 
     try {
-      // 各用語を /api/terms に登録（並列）
-      const results = await Promise.allSettled(
+      // fetch は HTTP 409（重複）や 500 でも reject しない（例外は通信自体が
+      // 失敗した時だけ）。以前は Promise.allSettled の fulfilled/rejected だけを
+      // 見ていたため、409/500 は succeeded にも failed にも数えられず、
+      // 「登録件数もエラーも出ないまま何も起きない」ように見えていた。
+      const results = await Promise.all(
         toRegister.map((t) =>
           fetch('/api/terms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ term: t.term, note: t.note, tag: t.tag }),
-          }).then((r) => r.json())
+          })
+            .then(async (r) => ({ ok: r.ok, status: r.status, body: await r.json().catch(() => ({})) }))
+            .catch((err) => ({ ok: false, status: 0, body: { error: err?.message } }))
         )
       );
 
-      const succeeded: Term[] = results
-        .filter((r): r is PromiseFulfilledResult<{ term: Term }> => r.status === 'fulfilled')
-        .map((r) => r.value.term)
-        .filter(Boolean);
+      const succeeded: Term[] = [];
+      let duplicateCount = 0;
+      let failedCount = 0;
+      const registeredIdx = new Set<number>();
+
+      results.forEach((r, i) => {
+        const originalIdx = targetIdx[i];
+        if (r.ok && r.body?.term) {
+          succeeded.push(r.body.term);
+          registeredIdx.add(originalIdx);
+        } else if (r.status === 409) {
+          duplicateCount += 1;
+          registeredIdx.add(originalIdx); // 既に登録済みなので選択リストから外してよい
+        } else {
+          failedCount += 1;
+        }
+      });
 
       if (succeeded.length > 0) {
         onImported(succeeded);
       }
 
-      const failed = results.filter((r) => r.status === 'rejected').length;
-      if (failed > 0) {
-        setError(`${failed} 件の登録に失敗しました。`);
+      // 登録・重複が確定した項目はリストから外し、失敗した項目だけ再登録できるように残す
+      setExtractedTerms((prev) => prev.filter((_, i) => !registeredIdx.has(i)));
+      setSelectedIds(new Set());
+
+      const parts: string[] = [];
+      if (succeeded.length > 0) parts.push(`登録 ${succeeded.length} 件`);
+      if (duplicateCount > 0) parts.push(`すでに登録済み ${duplicateCount} 件`);
+      if (failedCount > 0) parts.push(`失敗 ${failedCount} 件`);
+      setRegisterResult(parts.join(' / '));
+
+      if (failedCount > 0) {
+        setError(`${failedCount} 件の登録に失敗しました。もう一度試すか、内容を確認してください。`);
       }
     } catch {
       setError('登録中にエラーが発生しました。');
@@ -249,8 +280,24 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
         </div>
 
         <div className="p-6">
+          {/* 全件登録・全件重複などで抽出リストが空になった直後の結果画面。
+              これが無いと登録完了と同時にドロップゾーンへ戻ってしまい、
+              「何件登録できたか」が一瞬も表示されないまま消えていた。 */}
+          {extractedTerms.length === 0 && !isExtracting && registerResult && (
+            <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
+              <span className="text-4xl">✅</span>
+              <p className="font-serif text-lg font-bold text-[#1A1714]">{registerResult}</p>
+              <button
+                onClick={() => setRegisterResult('')}
+                className="border-2 border-[#1A1714] bg-[#1A1714] px-4 py-2 font-bold text-[#F7F1E3] hover:bg-[#332f2b]"
+              >
+                さらにファイルを追加する
+              </button>
+            </div>
+          )}
+
           {/* ドラッグ＆ドロップエリア */}
-          {extractedTerms.length === 0 && !isExtracting && (
+          {extractedTerms.length === 0 && !isExtracting && !registerResult && (
             <div>
               <div
                 onDrop={onDrop}
@@ -389,6 +436,12 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
                 ))}
               </div>
 
+              {registerResult && (
+                <div className="mt-3 border-2 border-[#1A1714] bg-[#D9A441]/20 px-4 py-2 text-sm font-bold text-[#1A1714]">
+                  {registerResult}
+                </div>
+              )}
+
               {error && (
                 <div className="mt-3 border-2 border-[#B83227] bg-white px-4 py-2 text-sm font-bold text-[#B83227]">
                   {error}
@@ -412,6 +465,7 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
                     setSelectedIds(new Set());
                     setMessage('');
                     setError('');
+                    setRegisterResult('');
                   }}
                   className="border-2 border-[#1A1714] px-4 py-3 font-bold hover:bg-[#1A1714]/5"
                 >

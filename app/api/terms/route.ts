@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured, Term } from '@/lib/supabase';
 import { requireAuth } from '@/lib/auth';
 import { todayStr } from '@/lib/date';
+import { INTERVALS } from '@/lib/constants';
 
 // 関数にしているのは、モジュール読み込み時ではなく呼び出し時の日付を使うため。
 // 定数のままだとサーバーが起動しっぱなしの間ずっと起動日が入り続ける。
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from('terms')
       .select('*')
+      .eq('user_id', DEFAULT_USER)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -130,6 +132,7 @@ export async function POST(req: NextRequest) {
       const { data: existing, error: dupCheckError } = await supabase
         .from('terms')
         .select('id, term')
+        .eq('user_id', DEFAULT_USER)
         .ilike('term', likePattern)
         .limit(1);
 
@@ -187,6 +190,23 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Term ID is required' }, { status: 400 });
     }
 
+    // level・next_review_at は編集モーダルの日付入力等、クライアントからの
+    // 自由入力を無検証で DB に渡していた。空文字の日付や範囲外の level は
+    // Postgres の型・check 制約でエラーになるが、原因不明の 500 として
+    // 現れるだけだったので、ここで弾いてはっきりした理由を返す。
+    if (level !== undefined && (!Number.isInteger(level) || level < 0 || level > INTERVALS.length - 1)) {
+      return NextResponse.json(
+        { error: `level は 0〜${INTERVALS.length - 1} の整数で指定してください。` },
+        { status: 400 }
+      );
+    }
+    if (next_review_at !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(next_review_at)) {
+      return NextResponse.json(
+        { error: '次回復習日は YYYY-MM-DD 形式で指定してください。' },
+        { status: 400 }
+      );
+    }
+
     const updates: Partial<Term> = {};
     if (term !== undefined) updates.term = term.trim();
     if (note !== undefined) updates.note = (note || '').trim();
@@ -199,6 +219,7 @@ export async function PATCH(req: NextRequest) {
         .from('terms')
         .update(updates)
         .eq('id', id)
+        .eq('user_id', DEFAULT_USER)
         .select()
         .single();
 
@@ -245,7 +266,8 @@ export async function DELETE(req: NextRequest) {
       const { error } = await supabase
         .from('terms')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', DEFAULT_USER);
 
       if (error) {
         console.error('Supabase delete term error:', error);

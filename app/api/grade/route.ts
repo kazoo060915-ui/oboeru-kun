@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     //    4 を送り続ければ1回の高得点で最長間隔まで飛べる、等）。
     const [result, dbLevelRes] = await Promise.all([
       gradeAnswer(term, note || '', answer || '', normalizeCoach(coach), userName?.trim() || 'あなた'),
-      useDb ? supabase!.from('terms').select('level').eq('id', termId).single() : Promise.resolve(null),
+      useDb ? supabase!.from('terms').select('level').eq('id', termId).eq('user_id', 'default_user').single() : Promise.resolve(null),
     ]);
 
     let baseLevel: number;
@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
           last_score: score,
         })
         .eq('id', termId)
+        .eq('user_id', 'default_user')
         .select('id');
 
       if (updateError) {
