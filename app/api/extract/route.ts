@@ -57,13 +57,14 @@ export async function POST(req: NextRequest) {
 
     // ─── PDF ───────────────────────────────────
     if (PDF_EXTENSIONS.includes(ext)) {
+      // pdf-parse v2 はモジュール自体が関数ではなく、PDFParse クラスを名前付き export する。
+      // v1 の `require('pdf-parse')(buffer)` 形式は v2 では TypeError になる。
+      const { PDFParse } = await import('pdf-parse');
+      const arrayBuffer = await file.arrayBuffer();
+      const parser = new PDFParse({ data: new Uint8Array(arrayBuffer) });
+
       try {
-        // pdf-parse は CommonJS モジュールのため require で呼ぶ
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const pdfData = await pdfParse(buffer);
+        const pdfData = await parser.getText();
         const text = pdfData.text;
 
         if (!text?.trim()) {
@@ -80,6 +81,8 @@ export async function POST(req: NextRequest) {
           { error: 'PDFの読み込みに失敗しました。破損していないか確認してください。' },
           { status: 500 }
         );
+      } finally {
+        await parser.destroy().catch(() => {});
       }
     }
 

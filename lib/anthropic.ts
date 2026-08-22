@@ -340,6 +340,33 @@ export interface ChatMessage {
   content: string;
 }
 
+/**
+ * Anthropic Messages API の制約に合わせて会話履歴を整える。
+ * - role が 'user' | 'assistant' 以外の要素、content が文字列でない要素を除去
+ * - 先頭が assistant で始まる場合は、user が現れるまで切り落とす
+ * - 同一ロールの連続をマージする
+ */
+function normalizeChatHistory(history: ChatMessage[]): ChatMessage[] {
+  const cleaned = (Array.isArray(history) ? history : []).filter(
+    (m): m is ChatMessage =>
+      !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim() !== ''
+  );
+
+  const firstUser = cleaned.findIndex((m) => m.role === 'user');
+  if (firstUser === -1) return [];
+
+  const merged: ChatMessage[] = [];
+  for (const m of cleaned.slice(firstUser)) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === m.role) {
+      last.content = `${last.content}\n${m.content}`;
+    } else {
+      merged.push({ role: m.role, content: m.content });
+    }
+  }
+  return merged;
+}
+
 export async function askCoachChat(
   term: string,
   note: string,
@@ -350,8 +377,8 @@ export async function askCoachChat(
   coach: CoachType = 'osaka',
   userName: string = 'あなた'
 ): Promise<string> {
-  const systemPrompt = buildChatSystemPrompt(term, note, userAnswer, correctText, missionText, coach, userName);
-  
+  const baseSystemPrompt = buildChatSystemPrompt(term, note, userAnswer, correctText, missionText, coach, userName);
+
   // コーチ別の初期挨拶セリフ
   const greetings: Record<CoachType, string> = {
     osaka:    `ほな${userName}、なんでも聞いてや！例え話でも実務の話でもなんでも答えるで！`,
@@ -361,7 +388,20 @@ export async function askCoachChat(
     sage:     `フォッフォッフォ、${userName}よ、何でも聞くがよい。知恵を授けようぞ。`,
   };
 
-  if (!anthropic) {
+  // 挨拶は system プロンプトに埋め込む。
+  // Messages API は messages の先頭が必ず user ロールでなければ 400 を返すため、
+  // 挨拶を assistant メッセージとして先頭に積むことはできない。
+  const systemPrompt = `${baseSystemPrompt}
+
+## この会話の状況
+あなたはすでに${userName}へ次のように話しかけ終えています（この一言を再度繰り返さないこと）:
+「${greetings[coach]}」
+以降のやり取りは、この挨拶に${userName}が答えたところから続いています。`;
+
+  // 先頭が user になるよう整形する（API の制約を満たすための保険）
+  const messages = normalizeChatHistory(chatHistory);
+
+  if (!anthropic || messages.length === 0) {
     return buildFallbackChatReply(chatHistory, coach, userName);
   }
 
@@ -370,10 +410,7 @@ export async function askCoachChat(
       model: MODEL_ID,
       max_tokens: 800,
       system: systemPrompt,
-      messages: [
-        { role: 'assistant', content: greetings[coach] },
-        ...chatHistory,
-      ],
+      messages,
     });
 
     const text = extractText(response.content);
