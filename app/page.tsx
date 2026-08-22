@@ -8,6 +8,7 @@ import AuthModal from '@/components/AuthModal';
 import NotificationModal from '@/components/NotificationModal';
 import FileImporter from '@/components/FileImporter';
 import TermAuditModal from '@/components/TermAuditModal';
+import DeleteAllTermsModal from '@/components/DeleteAllTermsModal';
 import EditTermModal from '@/components/EditTermModal';
 import { Term, getTermTag } from '@/lib/types';
 import { CoachType, COACH_LIST } from '@/lib/coach';
@@ -81,6 +82,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [showImporter, setShowImporter] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
 
   // ユーザー名の初期読み込み
@@ -635,6 +637,17 @@ export default function Home() {
         />
       )}
 
+      {/* 全削除モーダル */}
+      {showDeleteAll && terms && (
+        <DeleteAllTermsModal
+          termIds={terms.map((t) => t.id)}
+          onClose={() => setShowDeleteAll(false)}
+          onDeleted={(deletedIds) => {
+            setTerms((prev) => (prev ? prev.filter((t) => !deletedIds.includes(t.id)) : prev));
+          }}
+        />
+      )}
+
       {/* 用語編集モーダル */}
       {editingTerm && (
         <EditTermModal
@@ -1116,6 +1129,17 @@ export default function Home() {
                   })
                 )}
               </ul>
+
+              {terms.length > 0 && (
+                <div className="border-t border-[#1A1714]/15 px-4 py-2 text-right">
+                  <button
+                    onClick={() => setShowDeleteAll(true)}
+                    className="font-mono text-[10px] text-[#1A1714]/30 hover:text-[#B83227] hover:underline"
+                  >
+                    全{terms.length}件を削除する…
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
