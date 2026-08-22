@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { isAuthenticated } from '@/lib/auth';
 import { todayStr } from '@/lib/date';
+import { getEffectiveNotificationSettings } from '@/lib/notificationSettings';
 
 export async function GET(req: NextRequest) {
   return handleNotification(req);
@@ -30,6 +31,19 @@ async function handleNotification(req: NextRequest) {
     const isCron = req.headers.get('authorization') === `Bearer ${expectedSecret}`;
     if (!isCron && !isAuthenticated(req)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const settings = await getEffectiveNotificationSettings();
+
+    // ユーザーが「通知しない」を選んでいる場合、これは失敗ではなく意図した
+    // 状態なので、以下の「1通も届かなければ502」というガードには乗せない。
+    if (settings.channel === 'none') {
+      return NextResponse.json({
+        success: true,
+        dueCount: 0,
+        message: '',
+        results: { line: 'skipped (通知チャネルが「なし」に設定されています)', email: 'skipped (通知チャネルが「なし」に設定されています)' },
+      });
     }
 
     // 日本時間の「今日」。UTC基準だと Cron 実行時（07:00 JST = 22:00 UTC）に
@@ -80,7 +94,10 @@ async function handleNotification(req: NextRequest) {
     // を設定する。どちらか欠けていれば skip。
     const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const lineUserId = process.env.LINE_USER_ID;
-    if (lineToken && lineUserId) {
+    const lineWanted = settings.channel === 'line' || settings.channel === 'both';
+    if (!lineWanted) {
+      results.line = 'skipped (通知設定でLINEが無効になっています)';
+    } else if (lineToken && lineUserId) {
       try {
         const lineRes = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
@@ -112,8 +129,14 @@ async function handleNotification(req: NextRequest) {
 
     // 2. Email 通知送信 (Resend API 等)
     const resendApiKey = process.env.RESEND_API_KEY;
-    const toEmail = process.env.NOTIFICATION_TO_EMAIL;
-    if (resendApiKey && toEmail) {
+    // 宛先は「通知設定で登録したメールアドレス」を優先し、無ければ
+    // 環境変数の NOTIFICATION_TO_EMAIL にフォールバックする
+    // （lib/notificationSettings.ts の解決順序と揃える）。
+    const toEmail = settings.emailAddress;
+    const emailWanted = settings.channel === 'email' || settings.channel === 'both';
+    if (!emailWanted) {
+      results.email = 'skipped (通知設定でメールが無効になっています)';
+    } else if (resendApiKey && toEmail) {
       try {
         const emailRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -146,7 +169,7 @@ async function handleNotification(req: NextRequest) {
         results.email = `error: ${err.message}`;
       }
     } else {
-      results.email = 'skipped (RESEND_API_KEY / NOTIFICATION_TO_EMAIL not set)';
+      results.email = 'skipped (RESEND_API_KEY が未設定か、宛先メールアドレスが未登録です)';
     }
 
     // 1通も届いていないなら、それは成功ではない。
