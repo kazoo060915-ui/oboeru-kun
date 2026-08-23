@@ -10,6 +10,7 @@ import FileImporter from '@/components/FileImporter';
 import TermAuditModal from '@/components/TermAuditModal';
 import DeleteAllTermsModal from '@/components/DeleteAllTermsModal';
 import EditTermModal from '@/components/EditTermModal';
+import QuickQuizSession from '@/components/QuickQuizSession';
 import { Term, getTermTag } from '@/lib/types';
 import { CoachType, COACH_LIST } from '@/lib/coach';
 import { todayStr } from '@/lib/date';
@@ -18,7 +19,8 @@ import { triggerScoreEffects, triggerSessionCompleteEffects } from '@/lib/effect
 
 export default function Home() {
   const [terms, setTerms] = useState<Term[] | null>(null);
-  const [view, setView] = useState<'home' | 'quiz' | 'result' | 'add' | 'session_summary'>('home');
+  const [view, setView] = useState<'home' | 'quiz' | 'quick_quiz' | 'result' | 'add' | 'session_summary'>('home');
+  const [sessionMode, setSessionMode] = useState<'standard' | 'quick'>('standard');
   const [current, setCurrent] = useState<Term | null>(null);
   const [answer, setAnswer] = useState('');
   // 採点結果はストリーミングで届く（点数→ツッコミ→解説→…の順に段階的に確定する）ため、
@@ -236,6 +238,8 @@ export default function Home() {
     reset?: boolean;
     /** 問題番号を進めるか。回答せずに用語を除外した場合は進めない */
     advanceIndex?: boolean;
+    /** 出題モード ('standard': 記述説明, 'quick': 4択) */
+    mode?: 'standard' | 'quick';
   }
 
   const startQuiz = ({
@@ -243,11 +247,13 @@ export default function Home() {
     tag,
     reset = true,
     advanceIndex = true,
+    mode,
   }: StartQuizOptions = {}) => {
     // 継続時はセッション開始時の条件を引き継ぐ。ここを毎回 due から引き直していたのが
     // 「先取り復習に入ると次のお題へが無反応」の原因だった。
     const useForceAll = reset ? Boolean(forceAll) : sessionForceAll;
     const tagToUse = reset ? (tag !== undefined ? tag : selectedTag) : sessionTag;
+    const useMode = reset ? (mode || 'standard') : sessionMode;
 
     let targetPool: Term[] = [];
 
@@ -286,6 +292,7 @@ export default function Home() {
     setShowHint(false);
 
     if (reset) {
+      setSessionMode(useMode);
       setSessionForceAll(useForceAll);
       setSessionTag(tagToUse);
       setAskedIds([randomTerm.id]);
@@ -301,8 +308,33 @@ export default function Home() {
       if (advanceIndex) setSessionIndex((prev) => prev + 1);
     }
 
-    setView('quiz');
+    setView(useMode === 'quick' ? 'quick_quiz' : 'quiz');
   };
+
+  const handleQuickAnswerSaved = (data: {
+    isCorrect: boolean;
+    score: number;
+    updatedLevel: number;
+    nextReviewAt: string;
+    lastScore: number;
+  }) => {
+    if (!current) return;
+    setSessionScores((prev) => [...prev, data.score]);
+    if (terms) {
+      const updatedTerms = terms.map((t) =>
+        t.id === current.id
+          ? {
+              ...t,
+              level: data.updatedLevel,
+              next_review_at: data.nextReviewAt,
+              last_score: data.lastScore,
+            }
+          : t
+      );
+      setTerms(updatedTerms);
+    }
+  };
+
 
   const grade = async (overrideAnswer?: string) => {
     if (!current) return;
@@ -974,13 +1006,22 @@ export default function Home() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => startQuiz({ forceAll: true, tag: selectedTag, reset: true })}
-                  disabled={filteredTerms.length === 0}
-                  className="mt-5 w-full border-2 border-[#1A1714] bg-[#1A1714] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#332f2b]"
-                >
-                  ⚡ 【{selectedTag}】を{sessionLimit > 0 ? `${sessionLimit}問` : '全問'}特訓する
-                </button>
+                <div className="mt-5 flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => startQuiz({ forceAll: true, tag: selectedTag, reset: true, mode: 'standard' })}
+                    disabled={filteredTerms.length === 0}
+                    className="flex-1 border-2 border-[#1A1714] bg-[#1A1714] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#332f2b]"
+                  >
+                    ✍️ 【{selectedTag}】を記述特訓 ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
+                  </button>
+                  <button
+                    onClick={() => startQuiz({ forceAll: true, tag: selectedTag, reset: true, mode: 'quick' })}
+                    disabled={filteredTerms.length === 0}
+                    className="border-2 border-[#1A1714] bg-[#D9A441] px-4 py-3 font-bold text-[#1A1714] transition hover:bg-[#c99534] shadow-[2px_2px_0_0_#1A1714]"
+                  >
+                    ⚡ 4択で特訓
+                  </button>
+                </div>
               </div>
             ) : due.length > 0 ? (
               // 今日の復習カード
@@ -1020,12 +1061,22 @@ export default function Home() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => startQuiz({ reset: true })}
-                  className="mt-5 w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#9c2a20]"
-                >
-                  ⚡ {sessionLimit > 0 ? `サクッと ${sessionLimit} 問復習する` : '全問チャレンジする'}
-                </button>
+                <div className="mt-5 space-y-2.5">
+                  <button
+                    onClick={() => startQuiz({ reset: true, mode: 'standard' })}
+                    className="w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3.5 font-bold text-[#F7F1E3] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#9c2a20] flex items-center justify-center gap-2"
+                  >
+                    <span>✍️</span>
+                    <span>{sessionLimit > 0 ? `自分の言葉で ${sessionLimit} 問復習する` : '全問じっくりチャレンジする'}</span>
+                  </button>
+                  <button
+                    onClick={() => startQuiz({ reset: true, mode: 'quick' })}
+                    className="w-full border-2 border-[#1A1714] bg-[#D9A441] px-4 py-2.5 font-bold text-[#1A1714] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#c99534] flex items-center justify-center gap-2 text-xs sm:text-sm"
+                  >
+                    <span>⚡️</span>
+                    <span>特急・4択モードで復習する（スキマ時間・電車用）</span>
+                  </button>
+                </div>
               </div>
             ) : (
               // 本日のノルマ完了カード
@@ -1054,16 +1105,22 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="mt-5 flex gap-2">
+                <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
-                    onClick={() => startQuiz({ forceAll: true, reset: true })}
-                    className="flex-1 border-2 border-[#1A1714] bg-white px-3 py-2.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] transition-colors"
+                    onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'standard' })}
+                    className="border-2 border-[#1A1714] bg-white px-3 py-2.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] transition-colors"
                   >
-                    ⚡ 先取り復習する ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
+                    ✍️ 先取り復習 ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
+                  </button>
+                  <button
+                    onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'quick' })}
+                    className="border-2 border-[#1A1714] bg-[#D9A441]/20 px-3 py-2.5 text-xs font-bold text-[#8a6300] hover:bg-[#D9A441] hover:text-[#1A1714] transition-colors"
+                  >
+                    ⚡ 4択で先取り
                   </button>
                   <button
                     onClick={() => setView('add')}
-                    className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-3 py-2.5 text-xs font-bold text-[#F7F1E3] hover:bg-[#9c2a20] transition-colors"
+                    className="border-2 border-[#1A1714] bg-[#B83227] px-3 py-2.5 text-xs font-bold text-[#F7F1E3] hover:bg-[#9c2a20] transition-colors"
                   >
                     + 新しい用語を追加
                   </button>
@@ -1199,7 +1256,29 @@ export default function Home() {
           </div>
         )}
 
-        {/* 2. 出題・回答画面 (View === 'quiz') */}
+        {/* 2-A. 特急・4択出題画面 (View === 'quick_quiz') */}
+        {view === 'quick_quiz' && current && (
+          <QuickQuizSession
+            term={current}
+            coach={coach}
+            userName={userName}
+            sessionIndex={sessionIndex}
+            sessionLimit={sessionLimit}
+            today={today}
+            onAnswerSaved={handleQuickAnswerSaved}
+            onNext={() => {
+              if (sessionLimit > 0 && sessionIndex >= sessionLimit) {
+                setView('session_summary');
+              } else {
+                startQuiz({ reset: false });
+              }
+            }}
+            onExit={() => setView('home')}
+            onDeleteTerm={handleDeleteCurrentTerm}
+          />
+        )}
+
+        {/* 2-B. 記述・出題・回答画面 (View === 'quiz') */}
         {view === 'quiz' && current && (
           <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
             {/* セッション進行度バー */}

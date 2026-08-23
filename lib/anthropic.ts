@@ -923,3 +923,167 @@ JSON配列のみを出力してください。画像に専門用語が含まれ�
 
   return parseExtractedTerms(extractText(response.content));
 }
+
+// ──────────────────────────────────────────
+// 特急・4択問題生成（スキマ時間復習用）
+// ──────────────────────────────────────────
+
+export interface MultipleChoiceOption {
+  text: string;
+  isCorrect: boolean;
+  explanation: string;
+}
+
+export interface MultipleChoiceQuiz {
+  question: string;
+  choices: MultipleChoiceOption[];
+  coachPrompt: string;
+}
+
+function buildMultipleChoicePrompt(
+  term: string,
+  note: string,
+  coach: CoachType = 'osaka',
+  userName: string = 'あなた'
+): string {
+  const persona = getCoachPersona(coach);
+  return `あなたは「覚える君」アプリの学習コーチです。
+生徒の名前は【${userName}】です。
+生徒が出先やスキマ時間でもサクッと復習できるように、用語「${term}」に関する【高品質な4択クイズ（1問）】を作成してください。
+
+## あなたのキャラクター設定（必ずこの通りに振る舞うこと）
+${persona}
+
+## 呼称のルール
+- 「生徒さん」「ユーザー」は禁止。必ず【${userName}】と直接呼びかけること。
+
+## クイズ作成の極意（最重要！）
+1. **正解の選択肢（1つ）**:
+   - 用語の本質・定義・何のためのものかが、初学者にも分かりやすく正確に書かれていること。
+2. **ダミーの選択肢（3つ）**:
+   - **単なるデタラメではなく、実務や学習で「初心者が混同・勘違いしやすい別の関連技術や概念」**を混ぜること（例: 認証なら「認可」や「暗号化」、SSRなら「SSG」や「SPA」、propsなら「state」など）。
+   - これにより、選択肢を読むだけで他の周辺知識の整理にもなる。
+3. **各選択肢の解説（explanation）**:
+   - 正解には「なぜそれが正解か」、不正解には「これは実は〇〇のことやで！」と、1〜2文であなたのキャラクター口調でツッコミ・解説をつけること。
+4. **選択肢の並び順**:
+   - 4つの選択肢（choices）はランダムに並べてください（1番目だけが正解にならないように）。正解（isCorrect: true）は必ず1つだけにしてください。
+
+## 対象用語
+用語: ${term}
+文脈ヒント: ${note || 'なし'}
+
+## 出力形式
+必ず以下のキーを持つJSONオブジェクト**だけ**を出力してください。前置きや\`\`\`等のマークダウンは一切不要。
+
+{
+  "question": "あなたのキャラクターの口調で問いかける問題文（例: 『${userName}！「${term}」の説明として一番ピッタリなんはどれや？』）",
+  "coachPrompt": "出題時の短い一言（例: 『迷わず直感で選んでみ！』『スキマ時間でサクッといくで！』）",
+  "choices": [
+    {
+      "text": "選択肢1の文章（20〜40文字程度で簡潔に）",
+      "isCorrect": true または false,
+      "explanation": "あなたのキャラクター口調での一言解説（1〜2文）"
+    },
+    {
+      "text": "選択肢2の文章",
+      "isCorrect": true または false,
+      "explanation": "あなたのキャラクター口調での一言解説"
+    },
+    {
+      "text": "選択肢3の文章",
+      "isCorrect": true または false,
+      "explanation": "あなたのキャラクター口調での一言解説"
+    },
+    {
+      "text": "選択肢4の文章",
+      "isCorrect": true または false,
+      "explanation": "あなたのキャラクター口調での一言解説"
+    }
+  ]
+}`;
+}
+
+export async function generateMultipleChoiceQuiz(
+  term: string,
+  note: string = '',
+  coach: CoachType = 'osaka',
+  userName: string = 'あなた'
+): Promise<MultipleChoiceQuiz> {
+  const prompt = buildMultipleChoicePrompt(term, note, coach, userName);
+
+  if (!anthropic) {
+    return buildFallbackMultipleChoiceQuiz(term, coach, userName);
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: MODEL_ID,
+      max_tokens: 800,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const text = extractText(response.content);
+    const parsed = safeParseJson<MultipleChoiceQuiz>(text);
+
+    if (
+      parsed &&
+      typeof parsed.question === 'string' &&
+      Array.isArray(parsed.choices) &&
+      parsed.choices.length === 4 &&
+      parsed.choices.filter((c) => c.isCorrect).length === 1
+    ) {
+      return {
+        question: stripMarkdownSymbols(parsed.question),
+        coachPrompt: stripMarkdownSymbols(parsed.coachPrompt || 'サクッと選んでみて！'),
+        choices: parsed.choices.map((c) => ({
+          text: stripMarkdownSymbols(c.text),
+          isCorrect: Boolean(c.isCorrect),
+          explanation: stripMarkdownSymbols(c.explanation),
+        })),
+      };
+    }
+
+    console.warn('generateMultipleChoiceQuiz: Invalid JSON structure, using fallback. Raw text:', text);
+    return buildFallbackMultipleChoiceQuiz(term, coach, userName);
+  } catch (err) {
+    console.error('generateMultipleChoiceQuiz API error:', err);
+    return buildFallbackMultipleChoiceQuiz(term, coach, userName);
+  }
+}
+
+function buildFallbackMultipleChoiceQuiz(
+  term: string,
+  coach: CoachType = 'osaka',
+  userName: string = 'あなた'
+): MultipleChoiceQuiz {
+  const isOsaka = coach === 'osaka';
+  return {
+    question: isOsaka
+      ? `${userName}！「${term}」の説明として一番合っとるんはどれや？`
+      : `${userName}さん、「${term}」の説明として最も適切なものを選択してください。`,
+    coachPrompt: isOsaka ? 'サクッと直感で選んでみ！' : '直感で選んでみましょう！',
+    choices: [
+      {
+        text: `システムやWebを安全・円滑に動かすための専用の仕組み・定義`,
+        isCorrect: true,
+        explanation: isOsaka ? `正解！これが「${term}」の本質やで！バッチリや！` : `正解です！これが「${term}」の正しい定義です。`,
+      },
+      {
+        text: `データベースのレコードを一括更新する処理`,
+        isCorrect: false,
+        explanation: isOsaka ? `それはDBのバッチ処理やトランザクションのことやな！` : `それはデータベースの一括更新処理の説明です。`,
+      },
+      {
+        text: `サーバーと端末間の通信を丸ごと暗号化する技術`,
+        isCorrect: false,
+        explanation: isOsaka ? `それはSSL/TLS（暗号化通信）のことやで！` : `それは暗号化通信（SSL/TLS）の説明です。`,
+      },
+      {
+        text: `画面の見た目を整えるためのデザインスタイルシート`,
+        isCorrect: false,
+        explanation: isOsaka ? `それはCSS（スタイルシート）やな！` : `それはCSS（スタイルシート）の説明です。`,
+      },
+    ],
+  };
+}
+
