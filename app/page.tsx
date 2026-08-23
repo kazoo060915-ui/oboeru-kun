@@ -11,6 +11,7 @@ import TermAuditModal from '@/components/TermAuditModal';
 import DeleteAllTermsModal from '@/components/DeleteAllTermsModal';
 import EditTermModal from '@/components/EditTermModal';
 import QuickQuizSession from '@/components/QuickQuizSession';
+import RenameTagModal from '@/components/RenameTagModal';
 import { Term, getTermTag } from '@/lib/types';
 import { CoachType, COACH_LIST } from '@/lib/coach';
 import { todayStr } from '@/lib/date';
@@ -89,6 +90,19 @@ export default function Home() {
   const [showAudit, setShowAudit] = useState(false);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [editingTerm, setEditingTerm] = useState<Term | null>(null);
+  const [renamingTag, setRenamingTag] = useState<string | null>(null);
+
+  const handleTagRenamed = (oldTag: string, newTag: string) => {
+    if (terms) {
+      const updated = terms.map((t) =>
+        getTermTag(t) === oldTag || t.tag === oldTag ? { ...t, tag: newTag } : t
+      );
+      setTerms(updated);
+    }
+    if (selectedTag === oldTag) {
+      setSelectedTag(newTag);
+    }
+  };
 
   // ユーザー名の初期読み込み
   useEffect(() => {
@@ -754,6 +768,17 @@ export default function Home() {
         />
       )}
 
+      {/* 分野（タグ）名一括変更モーダル */}
+      {renamingTag && (
+        <RenameTagModal
+          isOpen={Boolean(renamingTag)}
+          oldTag={renamingTag}
+          termCount={terms ? terms.filter((t) => getTermTag(t) === renamingTag || t.tag === renamingTag).length : 0}
+          onClose={() => setRenamingTag(null)}
+          onRenamed={handleTagRenamed}
+        />
+      )}
+
       {/* お名前・ニックネーム設定モーダル */}
       {showNameModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A1714]/75 p-4 backdrop-blur-sm">
@@ -973,9 +998,18 @@ export default function Home() {
                     今日復習: {filteredDue.length}件 / 全{filteredTerms.length}件
                   </span>
                 </div>
-                <h3 className="mt-2 font-serif text-2xl font-bold text-[#1A1714]">
-                  {selectedTag}
-                </h3>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-serif text-2xl font-bold text-[#1A1714]">
+                    {selectedTag}
+                  </h3>
+                  <button
+                    onClick={() => setRenamingTag(selectedTag)}
+                    className="flex items-center gap-1 border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold text-[#1A1714] hover:bg-[#1A1714] hover:text-white transition-colors shadow-[2px_2px_0_0_#1A1714]"
+                    title="この分野の名前を一括変更する"
+                  >
+                    ✏️ 分野名を変更
+                  </button>
+                </div>
                 <p className="mt-1 text-xs text-[#1A1714]/70">
                   この分野の用語だけを集中して叩き込みます。
                 </p>

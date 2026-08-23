@@ -48,6 +48,17 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
     existingTerms.map((t) => normalizeTerm(t.term))
   );
 
+  // 既存のユニークなタグ一覧
+  const existingTagsList = React.useMemo(() => {
+    const set = new Set<string>();
+    existingTerms.forEach((t) => {
+      if (t.tag && t.tag.trim()) set.add(t.tag.trim());
+    });
+    return Array.from(set);
+  }, [existingTerms]);
+
+  const [activeCategory, setActiveCategory] = useState<string>('');
+
   // 複数ファイルを一括で処理する関数
   const handleFiles = useCallback(async (files: File[]) => {
     if (files.length === 0) return;
@@ -61,28 +72,37 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
 
     const rawExtracted: Array<{ term: string; note: string; tag: string }> = [];
     let errorCount = 0;
+    let detectedCategory = '';
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const autoTag = extractTagFromFileName(file.name);
+      const fallbackTag = extractTagFromFileName(file.name);
 
       setProgressText(
-        `全 ${files.length} ファイル中 ${i + 1} つ目の「${file.name}」を解析中…`
+        `全 ${files.length} ファイル中 ${i + 1} つ目の「${file.name}」をAIが解析中…`
       );
 
       try {
         const formData = new FormData();
         formData.append('file', file);
+        if (existingTagsList.length > 0) {
+          formData.append('existingTags', JSON.stringify(existingTagsList));
+        }
 
         const res = await fetch('/api/extract', { method: 'POST', body: formData });
         const data = await res.json();
 
         if (res.ok && data.terms && data.terms.length > 0) {
+          const fileCategory = (data.category || '').trim() || fallbackTag;
+          if (!detectedCategory && fileCategory) {
+            detectedCategory = fileCategory;
+          }
+
           data.terms.forEach((t: any) => {
             rawExtracted.push({
               term: (t.term || '').trim(),
               note: (t.note || '').trim(),
-              tag: autoTag,
+              tag: fileCategory,
             });
           });
         } else if (!res.ok) {
@@ -105,6 +125,9 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
       return;
     }
 
+    const mainCategory = detectedCategory || '一般';
+    setActiveCategory(mainCategory);
+
     // 重複マージ（ファイル間での同じ単語を1つに統合）
     const termMap = new Map<string, ExtractedTerm>();
     let duplicateCount = 0;
@@ -125,7 +148,7 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
         termMap.set(key, {
           term: item.term,
           note: item.note,
-          tag: item.tag,
+          tag: item.tag || mainCategory,
           isExisting,
         });
       }
@@ -157,7 +180,17 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
       mergedList.forEach((_, i) => initialSelected.add(i));
     }
     setSelectedIds(initialSelected);
-  }, [existingSet]);
+  }, [existingSet, existingTagsList]);
+
+  const updateAllTags = (newCategory: string) => {
+    setActiveCategory(newCategory);
+    setExtractedTerms((prev) =>
+      prev.map((item) => ({
+        ...item,
+        tag: newCategory.trim() || '一般',
+      }))
+    );
+  };
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -380,6 +413,44 @@ export default function FileImporter({ existingTerms = [], onImported, onClose }
                 <p className="mt-0.5 text-xs text-[#1A1714]/60">
                   登録したい用語にチェックを入れて「一括登録」してな。
                 </p>
+              </div>
+
+              {/* 分野（タグ名）設定バー */}
+              <div className="mb-4 rounded border-2 border-[#1A1714] bg-white p-3 shadow-[2px_2px_0_0_#1A1714]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-[#8a6300]">🏷️ 登録する分野名（タグ）:</span>
+                    <span className="text-[10px] text-[#1A1714]/50">AI自動判定・変更可能</span>
+                  </div>
+                  {existingTagsList.length > 0 && (
+                    <div className="flex flex-wrap gap-1 items-center">
+                      <span className="text-[10px] text-[#1A1714]/50">既存タグ:</span>
+                      {existingTagsList.slice(0, 4).map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => updateAllTags(tag)}
+                          className={`border px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                            activeCategory === tag
+                              ? 'border-[#B83227] bg-[#B83227] text-white'
+                              : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={activeCategory}
+                    onChange={(e) => updateAllTags(e.target.value)}
+                    placeholder="例: Webアプリの攻撃と防御"
+                    className="w-full border-2 border-[#1A1714] bg-[#F7F1E3] px-3 py-1.5 text-xs font-bold text-[#1A1714] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#B83227]"
+                  />
+                </div>
               </div>
 
               {/* 全選択・全解除 */}

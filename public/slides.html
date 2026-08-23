@@ -1,0 +1,1274 @@
+<!-- Same content available at /slides.html in Next.js public directory -->
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>卒業制作発表 — 忘れた頃にやってくる復習コーチ「覚える君」</title>
+  
+  <!-- Google Fonts: Zen Kaku Gothic New & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Shippori+Mincho:wght@700&display=swap" rel="stylesheet">
+
+  <style>
+    /* ==========================================================================
+       DESIGN TOKENS (和モダン × プレミアム スライド)
+       ========================================================================== */
+    :root {
+      --bg-dark: #121214;
+      --bg-card: #1c1917;
+      --bg-subtle: #292524;
+      --surface: #fafaf9;
+      --surface-warm: #f5f5f4;
+      --surface-card: #ffffff;
+      
+      --ink: #1c1917;
+      --ink-sub: #57534e;
+      --ink-muted: #78716c;
+      --rule: #e7e5e4;
+      --rule-dark: #3f3f46;
+
+      /* 覚える君 ブランドカラー */
+      --vermilion: #dc2626;      /* 朱色 */
+      --vermilion-light: #fee2e2;
+      --vermilion-dark: #991b1b;
+      --amber: #d97706;          /* 黄金色 */
+      --amber-light: #fef3c7;
+      --sakura: #f43f5e;         /* 桜色 */
+      --sakura-light: #ffe4e6;
+      --navy: #0f172a;           /* 濃紺 */
+      --accent: #2563eb;         /* 藍色 */
+      --accent-light: #dbeafe;
+
+      --font-base: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+      --font-en: "Outfit", "Zen Kaku Gothic New", sans-serif;
+      --font-mincho: "Shippori Mincho", "Hiragino Mincho ProN", serif;
+
+      --radius: 12px;
+      --shadow-lg: 0 10px 30px -5px rgba(0, 0, 0, 0.08), 0 4px 10px -2px rgba(0, 0, 0, 0.04);
+      --shadow-xl: 0 20px 40px -10px rgba(0, 0, 0, 0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #09090b;
+      overflow: hidden;
+      font-family: var(--font-base);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+
+    /* 16:9 スライドコンテナ（自動スケーリング） */
+    #stage {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 50%, #1f1f23 0%, #09090b 100%);
+    }
+
+    .slide {
+      position: absolute;
+      width: 1280px;
+      height: 720px;
+      background: var(--surface);
+      border-radius: 8px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7);
+      overflow: hidden;
+      opacity: 0;
+      visibility: hidden;
+      transform: translate(-50%, -50%) scale(var(--scale, 1));
+      top: 50%;
+      left: 50%;
+      transform-origin: center center;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* ==========================================================================
+       スライド共通ヘッダー・フッター
+       ========================================================================== */
+    .slide-wrap {
+      flex: 1;
+      padding: 44px 72px 64px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 2;
+    }
+
+    .slide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--rule);
+      flex: none;
+    }
+
+    .chapter-tag {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ink-muted);
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .chapter-tag .badge {
+      background: var(--vermilion);
+      color: #fff;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+
+    .slide-meta-right {
+      font-family: var(--font-en);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink-muted);
+      letter-spacing: 0.05em;
+    }
+
+    .slide-title {
+      font-size: 40px;
+      font-weight: 900;
+      color: var(--ink);
+      line-height: 1.3;
+      margin-top: 24px;
+      margin-bottom: 20px;
+      letter-spacing: -0.01em;
+    }
+    .slide-title .highlight {
+      color: var(--vermilion);
+      position: relative;
+      display: inline-block;
+    }
+    .slide-title .highlight::after {
+      content: '';
+      position: absolute;
+      left: 0; bottom: 2px;
+      width: 100%; height: 6px;
+      background: var(--vermilion-light);
+      z-index: -1;
+      border-radius: 3px;
+    }
+
+    .slide-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 0;
+    }
+
+    /* ==========================================================================
+       画面下部：グローバル進捗バー & コントロール
+       ========================================================================== */
+    #global-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 48px;
+      background: rgba(18, 18, 20, 0.95);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid var(--rule-dark);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 100;
+      color: #a1a1aa;
+      font-size: 13px;
+    }
+
+    .chapters-nav {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex: 1;
+    }
+    .chap-step {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #71717a;
+      font-weight: 600;
+      transition: color 0.2s;
+    }
+    .chap-step.on {
+      color: #ffffff;
+    }
+    .chap-step.on .chap-dot {
+      background: var(--vermilion);
+      box-shadow: 0 0 8px var(--vermilion);
+    }
+    .chap-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3f3f46;
+      transition: all 0.2s;
+    }
+
+    .controls-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-family: var(--font-en);
+    }
+
+    .page-counter {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.05em;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .btn-ctrl {
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      color: #e4e4e7;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+    }
+    .btn-ctrl:hover {
+      background: #3f3f46;
+      color: #fff;
+    }
+    .btn-ctrl.active-mode {
+      background: var(--vermilion);
+      border-color: var(--vermilion);
+      color: #fff;
+    }
+
+    #timer-display {
+      font-family: var(--font-en);
+      font-weight: 800;
+      font-size: 15px;
+      color: #fbbf24;
+      background: rgba(217, 119, 6, 0.15);
+      border: 1px solid rgba(217, 119, 6, 0.4);
+      padding: 3px 10px;
+      border-radius: 4px;
+      display: none;
+    }
+
+    /* ==========================================================================
+       ステップアニメーション用スタイル
+       ========================================================================== */
+    .step {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      visibility: hidden;
+    }
+    .step.shown {
+      opacity: 1;
+      transform: translateY(0);
+      visibility: visible;
+    }
+
+    /* ==========================================================================
+       SLIDE 1: 表紙
+       ========================================================================== */
+    .slide-cover {
+      background: linear-gradient(135deg, #1c1917 0%, #292524 60%, #171514 100%);
+      color: #fafaf9;
+      display: flex;
+      align-items: center;
+      position: relative;
+    }
+    .cover-inner {
+      width: 100%;
+      height: 100%;
+      padding: 72px 88px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      z-index: 2;
+    }
+    .cover-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(220, 38, 38, 0.2);
+      border: 1px solid rgba(220, 38, 38, 0.5);
+      color: #fca5a5;
+      padding: 6px 16px;
+      border-radius: 30px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      width: fit-content;
+    }
+    .cover-title-group h1 {
+      font-size: 54px;
+      font-weight: 900;
+      line-height: 1.25;
+      margin-bottom: 18px;
+      letter-spacing: -0.02em;
+    }
+    .cover-title-group h1 span.highlight-vermilion {
+      color: #ef4444;
+    }
+    .cover-sub {
+      font-size: 26px;
+      font-weight: 600;
+      color: #d6d3d1;
+      line-height: 1.4;
+    }
+    .cover-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      padding-top: 24px;
+    }
+    .cover-author {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .cover-author small {
+      display: block;
+      font-size: 14px;
+      color: #a8a29e;
+      font-weight: 400;
+      margin-top: 4px;
+    }
+    .cover-theme {
+      font-size: 16px;
+      font-weight: 600;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.1);
+      padding: 6px 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .cover-decor {
+      position: absolute;
+      right: -80px;
+      bottom: -80px;
+      width: 480px;
+      height: 480px;
+      background: radial-gradient(circle, rgba(220, 38, 38, 0.25) 0%, rgba(220, 38, 38, 0) 70%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ==========================================================================
+       SLIDE 2: 最初の引き（共感・痛みの共有）
+       ========================================================================== */
+    .empathy-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      margin-bottom: 24px;
+    }
+    .empathy-card {
+      background: #ffffff;
+      border-radius: var(--radius);
+      padding: 26px 30px;
+      border: 2px solid var(--rule);
+      box-shadow: var(--shadow-lg);
+      position: relative;
+    }
+    .empathy-card.good {
+      border-color: #3b82f6;
+      background: #f8faff;
+    }
+    .empathy-card.bad {
+      border-color: var(--vermilion);
+      background: #fffafa;
+    }
+    .card-label {
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-label.good-label { color: #2563eb; }
+    .card-label.bad-label { color: var(--vermilion); }
+    .empathy-card h3 {
+      font-size: 24px;
+      font-weight: 900;
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+    .empathy-card p {
+      font-size: 16px;
+      color: var(--ink-sub);
+      line-height: 1.5;
+    }
+
+    .key-punchline-box {
+      background: var(--bg-card);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 24px 36px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      box-shadow: var(--shadow-xl);
+      border-left: 6px solid var(--vermilion);
+    }
+    .punchline-icon {
+      font-size: 40px;
+      flex: none;
+    }
+    .punchline-text h4 {
+      font-size: 24px;
+      font-weight: 900;
+      line-height: 1.35;
+      color: #fef08a;
+      margin-bottom: 4px;
+    }
+    .punchline-text p {
+      font-size: 17px;
+      color: #d6d3d1;
+      line-height: 1.4;
+    }
+
+    /* ==========================================================================
+       SLIDE 3: 日常の面倒（なぜ復習できないのか？）
+       ========================================================================== */
+    .barriers-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 10px;
+    }
+    .barrier-card {
+      background: #fff;
+      border: 2px solid var(--rule);
+      border-radius: var(--radius);
+      padding: 26px 22px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+    }
+    .barrier-num {
+      font-family: var(--font-en);
+      font-size: 32px;
+      font-weight: 900;
+      color: var(--vermilion);
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+    .barrier-title {
+      font-size: 20px;
+      font-weight: 900;
+      line-height: 1.35;
+      margin-bottom: 10px;
+      color: var(--ink);
+    }
+    .barrier-desc {
+      font-size: 15px;
+      color: var(--ink-sub);
+      line-height: 1.55;
+    }
+    .barrier-tag {
+      margin-top: auto;
+      padding-top: 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--vermilion-dark);
+      background: var(--vermilion-light);
+      padding: 6px 10px;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    /* ==========================================================================
+       SLIDE 4: 解決策（覚える君の武器）
+       ========================================================================== */
+    .solution-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 22px;
+      margin-top: 10px;
+    }
+    .sol-card {
+      background: #ffffff;
+      border: 2px solid #e2e8f0;
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+    .sol-card.highlight-card {
+      border-color: var(--vermilion);
+      background: linear-gradient(180deg, #ffffff 0%, #fffbfb 100%);
+    }
+    .sol-icon-box {
+      font-size: 36px;
+      margin-bottom: 14px;
+    }
+    .sol-card h3 {
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.3;
+      margin-bottom: 10px;
+      color: var(--ink);
+    }
+    .sol-card p {
+      font-size: 15px;
+      color: var(--ink-sub);
+      line-height: 1.55;
+    }
+    .sol-badge {
+      margin-top: auto;
+      padding-top: 14px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #2563eb;
+      background: #eff6ff;
+      padding: 6px 12px;
+      border-radius: 6px;
+      display: inline-block;
+      width: fit-content;
+    }
+
+    /* ==========================================================================
+       SLIDE 5: デモ実演のご案内
+       ========================================================================== */
+    .demo-banner {
+      background: linear-gradient(135deg, #1c1917 0%, #292524 100%);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 44px 56px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-xl);
+      border: 2px solid #44403c;
+    }
+    .demo-left h3 {
+      font-size: 34px;
+      font-weight: 900;
+      color: #fef08a;
+      margin-bottom: 12px;
+      line-height: 1.25;
+    }
+    .demo-left p {
+      font-size: 19px;
+      color: #d6d3d1;
+      line-height: 1.5;
+    }
+    .demo-flow {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .demo-pill {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fca5a5;
+    }
+    .demo-right-btn {
+      background: var(--vermilion);
+      color: #fff;
+      padding: 16px 32px;
+      border-radius: 10px;
+      font-size: 20px;
+      font-weight: 900;
+      text-decoration: none;
+      box-shadow: 0 10px 25px rgba(220, 38, 38, 0.4);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .demo-right-btn:hover {
+      background: #b91c1c;
+      transform: scale(1.05);
+    }
+
+    /* ==========================================================================
+       SLIDE 6: こだわり（挫折させない工夫）
+       ========================================================================== */
+    .features-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .feat-box {
+      background: #fff;
+      border-radius: var(--radius);
+      border: 2px solid var(--rule);
+      padding: 24px 28px;
+      box-shadow: var(--shadow-lg);
+    }
+    .feat-box h4 {
+      font-size: 20px;
+      font-weight: 900;
+      color: var(--ink);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feat-box p {
+      font-size: 15px;
+      color: var(--ink-sub);
+      line-height: 1.5;
+    }
+
+    /* ==========================================================================
+       SLIDE 7: まとめ（結び）
+       ========================================================================== */
+    .summary-card {
+      background: linear-gradient(135deg, #1c1917 0%, #292524 100%);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 48px 64px;
+      text-align: center;
+      box-shadow: var(--shadow-xl);
+      border: 2px solid var(--vermilion);
+    }
+    .summary-card h2 {
+      font-size: 38px;
+      font-weight: 900;
+      line-height: 1.35;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+    .summary-card h2 span {
+      color: #f87171;
+    }
+    .summary-card p {
+      font-size: 20px;
+      color: #d6d3d1;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* ==========================================================================
+       一覧モーダル (Overview Modal)
+       ========================================================================== */
+    #overview-modal {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(9, 9, 11, 0.92);
+      backdrop-filter: blur(12px);
+      z-index: 1000;
+      display: none;
+      padding: 40px;
+      overflow-y: auto;
+    }
+    #overview-modal.open { display: block; }
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .thumb-card {
+      background: #27272a;
+      border: 2px solid #3f3f46;
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #e4e4e7;
+    }
+    .thumb-card:hover, .thumb-card.active {
+      border-color: var(--vermilion);
+      transform: translateY(-4px);
+    }
+    .thumb-no { font-weight: 900; color: var(--vermilion); font-size: 14px; margin-bottom: 4px; }
+    .thumb-title { font-size: 16px; font-weight: 700; color: #fff; }
+
+    /* ==========================================================================
+       桜吹雪エフェクト（Canvas）
+       ========================================================================== */
+    #sakura-canvas {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 99;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 16:9 ステージ -->
+  <div id="stage">
+    <canvas id="sakura-canvas"></canvas>
+
+    <!-- SLIDE 1: 表紙 -->
+    <div class="slide slide-cover" data-chapter="0">
+      <div class="cover-inner">
+        <div class="cover-badge">
+          <span>AI-DRIVEN SCHOOL / 卒業制作発表</span>
+        </div>
+        <div class="cover-title-group">
+          <h1>
+            忘れた頃にやってくる復習コーチ<br>
+            <span class="highlight-vermilion">「覚える君」</span>
+          </h1>
+          <div class="cover-sub">
+            勉強した知識を、一生モノの「自分の武器」に変える
+          </div>
+        </div>
+        <div class="cover-footer">
+          <div class="cover-author">
+            田中 一弘
+            <small>2026年8月30日 発表</small>
+          </div>
+          <div class="cover-theme">
+            テーマ：日常のちょっと面倒を解決するツール作成
+          </div>
+        </div>
+      </div>
+      <div class="cover-decor"></div>
+    </div>
+
+    <!-- SLIDE 2: 最初の引き（問題意識・共感） -->
+    <div class="slide" data-chapter="1">
+      <div class="slide-wrap">
+        <div class="slide-header">
+          <div class="chapter-tag">
+            <span class="badge">01</span>
+            <span>はじめに・背景</span>
+          </div>
+          <div class="slide-meta-right">THE PROBLEM</div>
+        </div>
+
+        <h2 class="slide-title">
+          勉強したこと、<span class="highlight">忘れていませんか？</span>
+        </h2>
+
+        <div class="slide-content">
+          <div class="empathy-container">
+            <div class="empathy-card good step shown">
+              <div class="card-label good-label">📖 講義中・ドリル回答時</div>
+              <h3>「なるほど！完全に理解した！」</h3>
+              <p>画面の前で頷き、わかったつもりになっている瞬間。</p>
+            </div>
+
+            <div class="empathy-card bad step">
+              <div class="card-label bad-label">💻 数日後のCursor作業時</div>
+              <h3>「……あれ？ これ習ったけど何だっけ？」</h3>
+              <p>いざ作ろうとすると手が止まり、言葉すら出てこない。</p>
+            </div>
+          </div>
+
+          <div class="key-punchline-box step">
+            <div class="punchline-icon">💡</div>
+            <div class="punchline-text">
+              <h4>「AIに聞けば分かる。でも、忘れたことは聞くことすらできない」</h4>
+              <p>復習が大事なのはわかっている。でも、自分で管理して復習なんてできない。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: 日常の面倒 -->
+    <div class="slide" data-chapter="2">
+      <div class="slide-wrap">
+        <div class="slide-header">
+          <div class="chapter-tag">
+            <span class="badge">02</span>
+            <span>日常のちょっと面倒</span>
+          </div>
+          <div class="slide-meta-right">3 BARRIERS</div>
+        </div>
+
+        <h2 class="slide-title">
+          復習が絶対に続かない<span class="highlight">「3つの壁」</span>
+        </h2>
+
+        <div class="slide-content">
+          <div class="barriers-grid">
+            <div class="barrier-card step">
+              <div class="barrier-num">01</div>
+              <div class="barrier-title">タイミングが<br>わからない</div>
+              <div class="barrier-desc">
+                エビングハウスの忘却曲線では翌日に74%忘れる。でも自力で復習時期は管理できない。
+              </div>
+              <div class="barrier-tag">手遅れになってゼロから再学習</div>
+            </div>
+
+            <div class="barrier-card step">
+              <div class="barrier-num">02</div>
+              <div class="barrier-title">登録が面倒＆<br>溜まって挫折</div>
+              <div class="barrier-desc">
+                単語帳に200件溜まった瞬間、「多すぎて無理」とアプリを開かなくなる。
+              </div>
+              <div class="barrier-tag">続かないツールは存在しないのと同じ</div>
+            </div>
+
+            <div class="barrier-card step">
+              <div class="barrier-num">03</div>
+              <div class="barrier-title">見るだけで<br>身につかない</div>
+              <div class="barrier-desc">
+                AIの綺麗な解説を眺めても「流暢性の錯覚」で実践では全く使えない。
+              </div>
+              <div class="barrier-tag">手と声を出さないと定着しない</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 4: 解決策 -->
+    <div class="slide" data-chapter="3">
+      <div class="slide-wrap">
+        <div class="slide-header">
+          <div class="chapter-tag">
+            <span class="badge">03</span>
+            <span>自分の武器</span>
+          </div>
+          <div class="slide-meta-right">THE SOLUTION</div>
+        </div>
+
+        <h2 class="slide-title">
+          忘れた頃にやってくる復習コーチ<span class="highlight">「覚える君」</span>
+        </h2>
+
+        <div class="slide-content">
+          <div class="solution-grid">
+            <div class="sol-card step">
+              <div class="sol-icon-box">📩</div>
+              <h3>向こうから聞いてくる</h3>
+              <p>忘れかけた絶妙なタイミングでLINEやメールにお知らせ。毎朝サクッと開くだけ。</p>
+              <div class="sol-badge">忘却曲線アルゴリズム</div>
+            </div>
+
+            <div class="sol-card highlight-card step">
+              <div class="sol-icon-box">🗣</div>
+              <h3>声で説明させる</h3>
+              <p>解説を見る前に自分の声で説明（出力強制）。大阪弁AIコーチが笑いを交えて採点！</p>
+              <div class="sol-badge">音声入力 × AI採点</div>
+            </div>
+
+            <div class="sol-card step">
+              <div class="sol-icon-box">💻</div>
+              <h3>今すぐ手を動かす</h3>
+              <p>言葉を覚えて終わりじゃない。「Cursorでこれを実行しろ」と実践ミッションを指示。</p>
+              <div class="sol-badge">現場で使える知識へ</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: デモ実演 -->
+    <div class="slide" data-chapter="4">
+      <div class="slide-wrap">
+        <div class="slide-header">
+          <div class="chapter-tag">
+            <span class="badge">04</span>
+            <span>実演デモ</span>
+          </div>
+          <div class="slide-meta-right">LIVE DEMO</div>
+        </div>
+
+        <h2 class="slide-title">
+          1日たった3問。<span class="highlight">1分で終わる復習ルーティン</span>
+        </h2>
+
+        <div class="slide-content">
+          <div class="demo-banner step shown">
+            <div class="demo-left">
+              <h3>ブラウザで実演デモ</h3>
+              <p>資料ポイッと登録 ➔ LINE通知 ➔ 声で答えて ➔ 桜吹雪！🌸</p>
+              <div class="demo-flow">
+                <span class="demo-pill">① 資料から自動抽出</span>
+                <span class="demo-pill">② サクッと3問（1分）</span>
+                <span class="demo-pill">③ 音声入力・AIツッコミ</span>
+              </div>
+            </div>
+            <div class="demo-right">
+              <a href="https://oboeru-kun.vercel.app" target="_blank" class="demo-right-btn" id="demo-btn">
+                覚える君を開く ➔
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 6: こだわり -->
+    <div class="slide" data-chapter="5">
+      <div class="slide-wrap">
+        <div class="slide-header">
+          <div class="chapter-tag">
+            <span class="badge">05</span>
+            <span>こだわり</span>
+          </div>
+          <div class="slide-meta-right">KEY FEATURES</div>
+        </div>
+
+        <h2 class="slide-title">
+          「続けられる」への<span class="highlight">徹底的なこだわり</span>
+        </h2>
+
+        <div class="slide-content">
+          <div class="features-2col">
+            <div class="feat-box step">
+              <h4>⚡️ スキマ時間対応：特急・4択モード</h4>
+              <p>電車の中や声が出せない時でも、Claudeが即時生成した4択クイズでゼロ秒復習。継続を途切れさせない。</p>
+            </div>
+            <div class="feat-box step">
+              <h4>🌸 5人のAIコーチ＆桜吹雪演出</h4>
+              <p>大阪の兄ちゃん、褒め上手な先輩など好みのコーチが伴走。80点以上で桜吹雪、間違えても楽しく学べる。</p>
+            </div>
+            <div class="feat-box step">
+              <h4>📂 講義資料からノイズゼロ自動抽出</h4>
+              <p>PDFやHTML教材をドラッグ＆ドロップするだけで、実践で使える重要概念だけをAIが厳選抽出。</p>
+            </div>
+            <div class="feat-box step">
+              <h4>🧠 AIへの「指示力（語彙力）」がアップ</h4>
+              <p>用語を正しく知ることで、CursorやClaudeへのプロンプト指示が劇的に的確になり、開発が加速！</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 7: まとめ -->
+    <div class="slide" data-chapter="6">
+      <div class="slide-wrap">
+        <div class="slide-header">
+          <div class="chapter-tag">
+            <span class="badge">06</span>
+            <span>まとめ</span>
+          </div>
+          <div class="slide-meta-right">CONCLUSION</div>
+        </div>
+
+        <h2 class="slide-title" style="text-align: center; margin-bottom: 28px;">
+          学んだ知識を、<span class="highlight">一生モノの自分の武器に</span>
+        </h2>
+
+        <div class="slide-content">
+          <div class="summary-card step shown">
+            <h2>
+              毎朝1分。忘れた頃にやってくる。<br>
+              <span>「覚える君」</span>
+            </h2>
+            <p>
+              AI時代だからこそ、自分の頭の中に確かな語彙と概念を持つ。<br>
+              学んだだけで終わらせず、自分の手足として使いこなすために。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- グローバル進捗バー ＆ コントロール -->
+  <div id="global-bar">
+    <div class="chapters-nav">
+      <div class="chap-step on" data-chap="0"><span class="chap-dot"></span><span>表紙</span></div>
+      <div class="chap-step" data-chap="1"><span class="chap-dot"></span><span>背景・引き</span></div>
+      <div class="chap-step" data-chap="2"><span class="chap-dot"></span><span>日常の面倒</span></div>
+      <div class="chap-step" data-chap="3"><span class="chap-dot"></span><span>自分の武器</span></div>
+      <div class="chap-step" data-chap="4"><span class="chap-dot"></span><span>デモ実演</span></div>
+      <div class="chap-step" data-chap="5"><span class="chap-dot"></span><span>こだわり</span></div>
+      <div class="chap-step" data-chap="6"><span class="chap-dot"></span><span>まとめ</span></div>
+    </div>
+
+    <div class="controls-right">
+      <div id="timer-display">⏱ 06:00</div>
+      <div class="page-counter"><span id="cur-idx">1</span> / <span id="total-idx">7</span></div>
+      <button class="btn-ctrl" id="btn-timer" title="タイマースタート (T)">⏱ タイマー</button>
+      <button class="btn-ctrl" id="btn-overview" title="スライド一覧 (O)">🗂 一覧</button>
+      <button class="btn-ctrl" id="btn-fullscreen" title="全画面 (F)">⛶ 全画面</button>
+    </div>
+  </div>
+
+  <!-- 一覧モーダル -->
+  <div id="overview-modal">
+    <div class="overview-grid" id="overview-grid"></div>
+  </div>
+
+  <script>
+    (function() {
+      const slides = Array.from(document.querySelectorAll('.slide'));
+      const totalSlides = slides.length;
+      let curSlideIndex = 0;
+      let isOverviewOpen = false;
+
+      const curIdxEl = document.getElementById('cur-idx');
+      const totalIdxEl = document.getElementById('total-idx');
+      totalIdxEl.textContent = totalSlides;
+
+      function resizeStage() {
+        const stageW = window.innerWidth;
+        const stageH = window.innerHeight - 48;
+        const targetW = 1280;
+        const targetH = 720;
+        const scale = Math.min(stageW / targetW, stageH / targetH, 1.3);
+        document.documentElement.style.setProperty('--scale', scale);
+      }
+      window.addEventListener('resize', resizeStage);
+      resizeStage();
+
+      function updateSlide() {
+        slides.forEach((s, idx) => {
+          if (idx === curSlideIndex) {
+            s.classList.add('active');
+            const chap = s.getAttribute('data-chapter');
+            document.querySelectorAll('.chap-step').forEach(c => {
+              c.classList.toggle('on', c.getAttribute('data-chap') === chap);
+            });
+          } else {
+            s.classList.remove('active');
+          }
+        });
+
+        curIdxEl.textContent = curSlideIndex + 1;
+
+        if (curSlideIndex === 4 || curSlideIndex === 6) {
+          triggerSakura();
+        }
+      }
+
+      function nextAction() {
+        const activeSlide = slides[curSlideIndex];
+        const unshownStep = activeSlide.querySelector('.step:not(.shown)');
+        if (unshownStep) {
+          unshownStep.classList.add('shown');
+        } else {
+          if (curSlideIndex < totalSlides - 1) {
+            curSlideIndex++;
+            const nextSlide = slides[curSlideIndex];
+            const firstStep = nextSlide.querySelector('.step');
+            if (firstStep && !firstStep.classList.contains('shown')) {
+              firstStep.classList.add('shown');
+            }
+            updateSlide();
+          }
+        }
+      }
+
+      function prevAction() {
+        const activeSlide = slides[curSlideIndex];
+        const shownSteps = Array.from(activeSlide.querySelectorAll('.step.shown'));
+        if (shownSteps.length > 1) {
+          shownSteps[shownSteps.length - 1].classList.remove('shown');
+        } else {
+          if (curSlideIndex > 0) {
+            curSlideIndex--;
+            updateSlide();
+          }
+        }
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (isOverviewOpen && e.key !== 'Escape' && e.key !== 'o') return;
+
+        switch(e.key) {
+          case 'ArrowRight':
+          case 'ArrowDown':
+          case ' ':
+          case 'Enter':
+          case 'PageDown':
+            e.preventDefault();
+            nextAction();
+            break;
+          case 'ArrowLeft':
+          case 'ArrowUp':
+          case 'Backspace':
+          case 'PageUp':
+            e.preventDefault();
+            prevAction();
+            break;
+          case 'f':
+          case 'F':
+            toggleFullScreen();
+            break;
+          case 't':
+          case 'T':
+            toggleTimer();
+            break;
+          case 'o':
+          case 'O':
+            toggleOverview();
+            break;
+          case 'Escape':
+            if (isOverviewOpen) toggleOverview();
+            break;
+        }
+      });
+
+      document.getElementById('stage').addEventListener('click', (e) => {
+        if (e.target.closest('a, button, #global-bar, #overview-modal')) return;
+        const clickX = e.clientX;
+        if (clickX > window.innerWidth / 2) {
+          nextAction();
+        } else {
+          prevAction();
+        }
+      });
+
+      function toggleFullScreen() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          if (document.exitFullscreen) document.exitFullscreen();
+        }
+      }
+      document.getElementById('btn-fullscreen').addEventListener('click', toggleFullScreen);
+
+      let timerInterval = null;
+      let timerSeconds = 6 * 60;
+      const timerDisplay = document.getElementById('timer-display');
+      const btnTimer = document.getElementById('btn-timer');
+
+      function toggleTimer() {
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+          btnTimer.classList.remove('active-mode');
+        } else {
+          timerDisplay.style.display = 'block';
+          btnTimer.classList.add('active-mode');
+          timerInterval = setInterval(() => {
+            timerSeconds--;
+            if (timerSeconds < 0) timerSeconds = 0;
+            const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+            const s = String(timerSeconds % 60).padStart(2, '0');
+            timerDisplay.textContent = `⏱ ${m}:${s}`;
+            if (timerSeconds <= 60) {
+              timerDisplay.style.color = '#ef4444';
+              timerDisplay.style.borderColor = '#ef4444';
+            }
+          }, 1000);
+        }
+      }
+      btnTimer.addEventListener('click', toggleTimer);
+
+      const overviewModal = document.getElementById('overview-modal');
+      const overviewGrid = document.getElementById('overview-grid');
+
+      function toggleOverview() {
+        isOverviewOpen = !isOverviewOpen;
+        if (isOverviewOpen) {
+          overviewGrid.innerHTML = '';
+          slides.forEach((s, idx) => {
+            const card = document.createElement('div');
+            card.className = `thumb-card ${idx === curSlideIndex ? 'active' : ''}`;
+            const titleEl = s.querySelector('.slide-title, h1');
+            const titleText = titleEl ? titleEl.textContent.trim().replace(/\s+/g, ' ') : `スライド ${idx+1}`;
+            card.innerHTML = `
+              <div class="thumb-no">SLIDE ${String(idx + 1).padStart(2, '0')}</div>
+              <div class="thumb-title">${titleText.slice(0, 30)}...</div>
+            `;
+            card.addEventListener('click', () => {
+              curSlideIndex = idx;
+              slides[curSlideIndex].querySelectorAll('.step').forEach(st => st.classList.add('shown'));
+              updateSlide();
+              toggleOverview();
+            });
+            overviewGrid.appendChild(card);
+          });
+          overviewModal.classList.add('open');
+        } else {
+          overviewModal.classList.remove('open');
+        }
+      }
+      document.getElementById('btn-overview').addEventListener('click', toggleOverview);
+      overviewModal.addEventListener('click', (e) => {
+        if (e.target === overviewModal) toggleOverview();
+      });
+
+      let sakuraActive = false;
+      function triggerSakura() {
+        if (sakuraActive) return;
+        sakuraActive = true;
+        const canvas = document.getElementById('sakura-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const petals = Array.from({ length: 45 }, () => ({
+          x: Math.random() * canvas.width,
+          y: Math.random() * -canvas.height,
+          size: Math.random() * 8 + 6,
+          speedY: Math.random() * 2 + 1.5,
+          speedX: Math.random() * 2 - 1,
+          rot: Math.random() * 360,
+          rotSpeed: Math.random() * 2 - 1,
+          color: Math.random() > 0.3 ? '#f43f5e' : '#fbcfe8',
+          opacity: Math.random() * 0.6 + 0.4
+        }));
+
+        let count = 0;
+        function render() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          petals.forEach(p => {
+            p.y += p.speedY;
+            p.x += p.speedX;
+            p.rot += p.rotSpeed;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate((p.rot * Math.PI) / 180);
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.opacity;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, p.size, p.size * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          });
+
+          count++;
+          if (count < 220) {
+            requestAnimationFrame(render);
+          } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            sakuraActive = false;
+          }
+        }
+        render();
+      }
+
+      updateSlide();
+    })();
+  </script>
+</body>
+</html>

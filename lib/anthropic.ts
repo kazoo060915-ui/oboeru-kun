@@ -754,75 +754,85 @@ export interface ExtractedTerm {
   note: string;
 }
 
+export interface ExtractionResult {
+  /** 推定された教材・分野の正式タイトル（例: "Webアプリの攻撃と防御", "インターネットの仕組み"） */
+  category: string;
+  /** 抽出された用語一覧 */
+  terms: ExtractedTerm[];
+}
+
 /**
- * 講義文字起こし・スライド・教材HTMLなどのテキストから復習すべき最重要用語を自動抽出する。
- * source は元ファイル名（コンテキスト参照用）。
+ * 講義文字起こし・スライド・教材HTMLなどのテキストから復習すべき最重要用語と、
+ * 教材全体の分野・シリーズ名（カテゴリ）を自動抽出する。
+ * existingCategories が渡された場合は、既存タグとのスマート名寄せを行う。
  */
 export async function extractTermsFromText(
   text: string,
-  source: string
-): Promise<ExtractedTerm[]> {
-  // 長すぎるテキストは切り詰める。上限は Haiku のコンテキストに対して
-  // 十分余裕があり、かつ講義資料1ファイル（複数レッスンを束ねたものを含む）が
-  // 丸ごと収まる程度に取る。以前の 30000 文字では、9レッスンを1ファイルに
-  // まとめた教材が Lesson 2 あたりで切れ、以降の用語が一度も読まれていなかった。
+  source: string,
+  existingCategories: string[] = []
+): Promise<ExtractionResult> {
   const MAX_CHARS = 120000;
   const truncated =
     text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) + '\n\n[... 以降は省略 ...]' : text;
 
+  const existingListStr =
+    existingCategories.length > 0
+      ? `## 既存の分野・タグ一覧（スマート名寄せ用）
+学習者がすでに登録している分野一覧です:
+${existingCategories.map((c) => `- ${c}`).join('\n')}
+
+**【重要: 既存分野への名寄せルール】**
+もし今回の教材が、上記既存分野のいずれかのレッスン・続き・関連内容である場合は、新しく別の名前を付けずに**上記の一覧から最も適切な名前をそのまま "category" に指定してください**（例: 既存に「Webアプリの攻撃と防御」があり、今回の教材が「コース2 レッスン3」なら、新しいタグを作らず「Webアプリの攻撃と防御」にする）。
+どれにも当てはまらない全く新しいテーマの場合のみ、新しい適切な日本語分野名を作成してください。`
+      : '';
+
   const prompt = `あなたは教育・学習設計の最高責任者（チーフコーチ）です。
 以下のテキストは「${source}」からの教材・講義テキストです（HTML教材、講義文字起こし、スライド、メモ等）。
 
-この教材を分析し、**受講者が繰り返し復習して定着させる価値のある、名前のついた概念・技術**を厳選して抽出してください。
+この教材を分析し、次の2点を行ってください：
+1. **【教材全体の日本語分野名・シリーズ名（category）の特定】**:
+   - 教材のタイトル（<title>や<h1>、ヘッダー「○○｜コースX」など）や内容から、この教材全体の自然で分かりやすい日本語タイトル（10〜25文字程度、例: 『Webアプリの攻撃と防御』『インターネットの仕組み』『React基礎』など）を1つ特定してください。ファイル名がローマ字（web-kougeki等）であっても、本文中の正しい日本語名を特定してください。
+2. **【復習すべき重要用語（terms）の厳選抽出】**:
+   - 受講者が繰り返し復習して定着させる価値のある、名前のついた概念・技術を厳選して抽出してください。
 
-判断のゴールは「これを覚えて自分の言葉で説明できるようになったら、実務や実生活で実際に使えるぞ」と言えるものだけを残すことです。
+${existingListStr}
 
 ## 抽出する個数について（重要）
 **固定の上限はありません。教材の分量と密度に応じて決めてください。**
-
 - 1つのレッスン・章・節あたり **0〜5個** を目安にする
 - 複数のレッスンが1ファイルにまとまっている場合は、**レッスンごとに数え直す**
-  （例: 8レッスン分が入った資料なら、全体で20〜35個になることもある）
-- 教材が「📖 用語解説」のように用語を明示している場合、そこは有力な候補
-- 逆に、講義の進め方の話が中心で該当する用語が無ければ **空配列 [] が正解**
-
-**大事なのは個数ではなく、1件も無駄を混ぜないことです。**
-基準を満たすものは資料の最後まで漏れなく拾い、満たさないものは1件も入れないでください。
-教材の後半にある用語を取りこぼさないよう、**必ず最後まで読み切ってから**出力してください。
-
-## 抽出の思考プロセス
-1. **主題の特定**: 教材のタイトル、ゴール、まとめ、用語解説などから「何を教えているか」を掴む。
-2. **候補の列挙**: 主役として解説されている言葉を挙げる。
-3. **単独テストで足切り**: 下の判定基準に照らし、通らないものを容赦なく捨てる。
-4. **最終確認**: 残した各件について「これは講義を知らない同僚にも通じるか？」を
-   もう一度自問し、少しでも怪しければ捨てる。
+- 基準を満たす用語が無ければ terms は空配列 [] が正解
 
 ${EXTRACT_CRITERIA}
 
 ## note の作り方（重要！）
-note は「受講者が思い出すための文脈ヒント」のみを30字以内で書くこと。
-- ✅ 許可：「${source}で登場」「通信の確実性を担保する方式」
-- ❌ 禁止：用語の定義や答えのネタバレを書くこと
+note は「受講者が思い出すための文脈ヒント」のみを30字以内で書くこと（答えのネタバレ禁止）。
 
 ## 出力形式
-JSON配列のみを出力してください（マークダウンの \`\`\`json 等は不要）。
+必ず以下のキーを持つJSONオブジェクト**だけ**を出力してください。前置きや\`\`\`等のマークダウンは一切不要。
 
-[
-  {"term": "抽出した用語", "note": "文脈ヒント（30字以内）"}
-]
+{
+  "category": "教材の日本語分野名（例: Webアプリの攻撃と防御）",
+  "terms": [
+    {"term": "抽出した用語", "note": "文脈ヒント（30字以内）"}
+  ]
+}
 
 ## 教材テキスト
 ${truncated}`;
 
+  const defaultCategory = source.replace(/\.[^/.]+$/, '').replace(/[_\-]/g, ' ').trim();
+
   if (!anthropic) {
-    return [
-      { term: 'サンプル用語1', note: `${source} から抽出（APIキー未設定のためデモ）` },
-      { term: 'サンプル用語2', note: `${source} から抽出（APIキー未設定のためデモ）` },
-    ];
+    return {
+      category: 'Web開発・セキュリティ実践',
+      terms: [
+        { term: 'サンプル用語1', note: `${source} から抽出（APIキー未設定のためデモ）` },
+        { term: 'サンプル用語2', note: `${source} から抽出（APIキー未設定のためデモ）` },
+      ],
+    };
   }
 
-  // 複数レッスンを束ねた教材では30件を超えることがあるため、
-  // 2000 では JSON が途中で切れて丸ごとパース失敗（＝0件）になっていた。
   const response = await anthropic.messages.create({
     model: MODEL_ID,
     max_tokens: 8000,
@@ -833,68 +843,95 @@ ${truncated}`;
     console.error('Extract response was truncated at max_tokens.');
   }
 
-  return parseExtractedTerms(extractText(response.content));
+  return parseExtractionResult(extractText(response.content), defaultCategory);
 }
 
 /**
- * 抽出結果のJSON配列を安全に取り出す。
- *
- * 以前は生の JSON.parse だったため、AIが「はい、抽出しました！」等の
- * 前置きを1文添えただけでファイル取込が500エラーになっていた。
- * 採点と同じ補正パーサを通し、それでも駄目なら空配列（＝「見つからへんかった」表示）に倒す。
+ * 抽出結果のJSON（{ category, terms } または [ ... ]）を安全に取り出す。
  */
-function parseExtractedTerms(rawText: string): ExtractedTerm[] {
-  const parsed = safeParseJson<unknown>(rawText || '[]');
-  if (!Array.isArray(parsed)) {
-    console.error('Extract response was not a JSON array. Raw text:', rawText);
-    return [];
+function parseExtractionResult(rawText: string, defaultCategory: string): ExtractionResult {
+  const parsed = safeParseJson<any>(rawText || '{}');
+
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.terms)) {
+    const rawCategory = typeof parsed.category === 'string' ? parsed.category.trim() : '';
+    const terms: ExtractedTerm[] = parsed.terms
+      .filter((t: any) => Boolean(t) && typeof t === 'object')
+      .map((t: any) => ({
+        term: stripMarkdownSymbols(String(t.term ?? '')),
+        note: stripMarkdownSymbols(String(t.note ?? '')),
+      }))
+      .filter((t: ExtractedTerm) => t.term.length > 0);
+
+    return {
+      category: stripMarkdownSymbols(rawCategory) || defaultCategory,
+      terms,
+    };
   }
 
-  return parsed
-    .filter((t): t is { term?: unknown; note?: unknown } => Boolean(t) && typeof t === 'object')
-    .map((t) => ({
-      term: stripMarkdownSymbols(String(t.term ?? '')),
-      note: stripMarkdownSymbols(String(t.note ?? '')),
-    }))
-    .filter((t) => t.term.length > 0);
+  // 旧形式（配列直接）のフォールバック
+  if (Array.isArray(parsed)) {
+    const terms: ExtractedTerm[] = parsed
+      .filter((t: any) => Boolean(t) && typeof t === 'object')
+      .map((t: any) => ({
+        term: stripMarkdownSymbols(String(t.term ?? '')),
+        note: stripMarkdownSymbols(String(t.note ?? '')),
+      }))
+      .filter((t: ExtractedTerm) => t.term.length > 0);
+
+    return {
+      category: defaultCategory,
+      terms,
+    };
+  }
+
+  console.error('Extract response was not valid JSON. Raw text:', rawText);
+  return { category: defaultCategory, terms: [] };
 }
 
 /**
- * 画像（PNG/JPG/JPEG/WEBP）から Claude Vision API で用語を直接抽出する。
- * imageBase64 は data URL なし の純粋な base64 文字列。
- * mediaType は 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'。
+ * 画像（PNG/JPG/JPEG/WEBP）から Claude Vision API で用語と分野名を直接抽出する。
  */
 export async function extractTermsFromImage(
   imageBase64: string,
   mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
-  source: string
-): Promise<ExtractedTerm[]> {
+  source: string,
+  existingCategories: string[] = []
+): Promise<ExtractionResult> {
+  const existingListStr =
+    existingCategories.length > 0
+      ? `## 既存の分野・タグ一覧:
+${existingCategories.map((c) => `- ${c}`).join('\n')}
+もし画像の内容が上記既存分野のいずれかに当てはまる場合は、その分野名をそのまま category に使用してください。`
+      : '';
+
   const textPrompt = `あなたは教育・学習設計の最高責任者（チーフコーチ）です。
 この画像は「${source}」からのスライド・図解・板書です。
 
-画像に含まれるテキストや図から、**受講者が繰り返し復習して定着させる価値のある、名前のついた概念・技術**を厳選して抽出してください。
+画像に含まれるテキストや図から：
+1. **【スライド全体の日本語分野名・シリーズ名（category）】**（例: Webアプリの攻撃と防御、React基礎など）
+2. **【復習すべき重要用語（terms）】**（1枚あたり0〜5個目安）
+を抽出してください。
 
-判断のゴールは「これを覚えて自分の言葉で説明できるようになったら、実務や実生活で実際に使えるぞ」と言えるものだけを残すことです。
-
-**個数を埋めようとしないでください。** 1枚のスライドなら 0〜5個が目安です。
-見出しや図の飾り文字しか無い場合、空配列 [] を返すのが正解です。
-
+${existingListStr}
 ${EXTRACT_CRITERIA}
 
-## note の作り方
-note は「文脈ヒント」のみを30字以内で書くこと（答えのネタバレ禁止）。
-
 ## 出力形式
-JSON配列のみを出力してください。画像に専門用語が含まれていない場合は空配列 [] を返してください。
+JSONオブジェクトのみを出力してください。
 
-[
-  {"term": "抽出した用語", "note": "文脈ヒント（30字以内）"}
-]`;
+{
+  "category": "日本語の分野名",
+  "terms": [
+    {"term": "抽出した用語", "note": "文脈ヒント（30字以内）"}
+  ]
+}`;
+
+  const defaultCategory = source.replace(/\.[^/.]+$/, '').replace(/[_\-]/g, ' ').trim();
 
   if (!anthropic) {
-    return [
-      { term: 'サンプル用語（画像）', note: `${source} から抽出（APIキー未設定のためデモ）` },
-    ];
+    return {
+      category: 'スライド学習',
+      terms: [{ term: 'サンプル用語（画像）', note: `${source} から抽出（APIキー未設定のためデモ）` }],
+    };
   }
 
   const response = await anthropic.messages.create({
@@ -921,7 +958,7 @@ JSON配列のみを出力してください。画像に専門用語が含まれ�
     ],
   });
 
-  return parseExtractedTerms(extractText(response.content));
+  return parseExtractionResult(extractText(response.content), defaultCategory);
 }
 
 // ──────────────────────────────────────────

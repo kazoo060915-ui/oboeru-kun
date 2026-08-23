@@ -86,7 +86,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let terms: ExtractedTerm[] = [];
+    const existingTagsRaw = formData.get('existingTags');
+    let existingTags: string[] = [];
+    if (typeof existingTagsRaw === 'string' && existingTagsRaw.trim()) {
+      try {
+        const parsed = JSON.parse(existingTagsRaw);
+        if (Array.isArray(parsed)) {
+          existingTags = parsed.map((t) => String(t).trim()).filter(Boolean);
+        }
+      } catch {
+        existingTags = existingTagsRaw.split(',').map((t) => t.trim()).filter(Boolean);
+      }
+    }
+
+    let extractionResult = { category: '', terms: [] as ExtractedTerm[] };
 
     // ─── PDF ───────────────────────────────────
     if (PDF_EXTENSIONS.includes(ext)) {
@@ -102,12 +115,13 @@ export async function POST(req: NextRequest) {
 
         if (!text?.trim()) {
           return NextResponse.json({
+            category: '',
             terms: [],
             message: 'このPDFからテキストを抽出できへんかったわ。スキャンしただけの画像PDFは非対応やで。代わりにスクリーンショット（.png/.jpg）で試してみて！',
           });
         }
 
-        terms = await extractTermsFromText(text, fileName);
+        extractionResult = await extractTermsFromText(text, fileName, existingTags);
       } catch (pdfError: any) {
         console.error('PDF parse error:', pdfError);
         return NextResponse.json(
@@ -136,7 +150,7 @@ export async function POST(req: NextRequest) {
 
       const arrayBuffer = await file.arrayBuffer();
       const base64 = Buffer.from(arrayBuffer).toString('base64');
-      terms = await extractTermsFromImage(base64, mediaType, fileName);
+      extractionResult = await extractTermsFromImage(base64, mediaType, fileName, existingTags);
     }
 
     // ─── テキスト系 ─────────────────────────────
@@ -152,12 +166,15 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      terms = await extractTermsFromText(text, fileName);
+      extractionResult = await extractTermsFromText(text, fileName, existingTags);
     }
+
+    const { category, terms } = extractionResult;
 
     // 結果返却
     if (!terms || terms.length === 0) {
       return NextResponse.json({
+        category: category || '',
         terms: [],
         message: 'このファイルから復習すべき用語は見つからへんかったわ。別のファイルを試してみて。',
       });
@@ -170,9 +187,10 @@ export async function POST(req: NextRequest) {
       : 'テキスト';
 
     return NextResponse.json({
+      category: category || '',
       terms,
       source: fileName,
-      message: `${fileTypeLabel}ファイル「${fileName}」から ${terms.length} 件の用語を抽出したで！`,
+      message: `${fileTypeLabel}ファイル「${fileName}」から ${terms.length} 件の用語（分野: ${category || '一般'}）を抽出したで！`,
     });
   } catch (error: any) {
     console.error('Extract API Error:', error);
