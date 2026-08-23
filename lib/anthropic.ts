@@ -288,19 +288,47 @@ ${persona}
 - 生徒のメモに出てくる固有名詞（生徒自身が作ったアプリ名等）は断定せず確認する形で答える。`;
 }
 
+// 閉じ引用符がまだ来ていない「書きかけ」の文字列値を、その時点までの
+// 生JSONから安全に取り出す。チャンクの切れ目でエスケープシーケンスが
+// 半端になっている（末尾が `\` 単体、`\u12` の途中等）と JSON.parse が
+// 例外を投げるので、そのぶんだけ切り詰めてから包む。
+function extractInProgressText(acc: string, key: string): string | undefined {
+  const startMatch = acc.match(new RegExp(`"${key}"\\s*:\\s*"`));
+  if (!startMatch || startMatch.index === undefined) return undefined;
+
+  let raw = acc.slice(startMatch.index + startMatch[0].length);
+
+  // 末尾が閉じていないエスケープの先頭（奇数個の `\`）なら、その `\` を落とす
+  const trailingBackslashes = raw.match(/\\+$/)?.[0].length ?? 0;
+  if (trailingBackslashes % 2 === 1) {
+    raw = raw.slice(0, -1);
+  }
+  // 末尾が `\uXXXX` の途中（6文字に満たない）なら、`\u` の手前まで落とす
+  const partialUnicode = raw.match(/\\u[0-9a-fA-F]{0,3}$/);
+  if (partialUnicode) {
+    raw = raw.slice(0, raw.length - partialUnicode[0].length);
+  }
+
+  try {
+    return JSON.parse(`"${raw}"`) as string;
+  } catch {
+    return undefined;
+  }
+}
+
 // ストリーミング中、JSONがまだ閉じていない途中の生テキストから
-// 「値が確定したフィールド」だけを都度抜き出す。プロンプト側でキー順を
+// その時点で分かる範囲の値を都度抜き出す。プロンプト側でキー順を
 // score → tsukkomi → correct → missed → mission に固定しているので、
-// 手前から順に「次のキーが始まっている（＝直前の値が閉じた）」ことを
-// もって確定とみなせる。文字列値は生JSONのエスケープのまま
-// `"${raw}"` として再度 JSON.parse することで安全にデコードする。
+// 各フィールドは「次のキーが始まっている（＝確定）」か「まだ書きかけ」の
+// どちらかとして扱える。書きかけの間も逐次値を返すことで、UI側は
+// ChatGPT風に文章が少しずつ伸びていくタイプライター表示ができる。
 function extractPartialGradeFields(acc: string): Partial<GradeResult> {
   const partial: Partial<GradeResult> = {};
 
   const scoreMatch = acc.match(/"score"\s*:\s*(\d+)/);
   if (scoreMatch) partial.score = Number(scoreMatch[1]);
 
-  const decodeStringField = (key: string, nextKeyPattern: string): string | undefined => {
+  const decodeClosedField = (key: string, nextKeyPattern: string): string | undefined => {
     const re = new RegExp(`"${key}"\\s*:\\s*"((?:\\\\[\\s\\S]|[^"\\\\])*)"\\s*,\\s*(?=${nextKeyPattern})`);
     const m = acc.match(re);
     if (!m) return undefined;
@@ -311,10 +339,13 @@ function extractPartialGradeFields(acc: string): Partial<GradeResult> {
     }
   };
 
-  const tsukkomi = decodeStringField('tsukkomi', '"correct"');
+  const readStringField = (key: string, nextKeyPattern: string): string | undefined =>
+    decodeClosedField(key, nextKeyPattern) ?? extractInProgressText(acc, key);
+
+  const tsukkomi = readStringField('tsukkomi', '"correct"');
   if (tsukkomi !== undefined) partial.tsukkomi = tsukkomi;
 
-  const correct = decodeStringField('correct', '"missed"');
+  const correct = readStringField('correct', '"missed"');
   if (correct !== undefined) partial.correct = correct;
 
   const missedMatch = acc.match(/"missed"\s*:\s*(\[[^\]]*\])\s*,\s*(?="mission")/);
@@ -334,6 +365,9 @@ function extractPartialGradeFields(acc: string): Partial<GradeResult> {
     } catch {
       // noop
     }
+  } else {
+    const inProgress = extractInProgressText(acc, 'mission');
+    if (inProgress !== undefined) partial.mission = inProgress;
   }
 
   return partial;
@@ -366,11 +400,11 @@ export async function gradeAnswer(
     // 「AIの返事がうまく読み取れんかった」で捨てられることがあった。
     //
     // ストリーミングで受けるのは、生成完了（15秒前後）までUIを固まらせず、
-    // 点数・ツッコミ・解説が出来上がった順に画面へ流し込むため。全量が
-    // 揃ってから返す処理自体は変えていない（DB書き込みは最後まで待つ）。
+    // 点数・ツッコミ・解説を文章が伸びていく様子ごと画面へ流し込むため
+    // （ChatGPT等と同じタイプライター表示）。全量が揃ってから返す処理
+    // 自体は変えていない（DB書き込みは最後まで待つ）。
     let acc = '';
-    let sentFieldCount = 0;
-    const fieldOrder: (keyof GradeResult)[] = ['score', 'tsukkomi', 'correct', 'missed', 'mission'];
+    let lastSentJson = '';
     const stream = anthropic.messages.stream({
       model: MODEL_ID,
       max_tokens: 4000,
@@ -381,9 +415,11 @@ export async function gradeAnswer(
       stream.on('text', (delta) => {
         acc += delta;
         const partial = extractPartialGradeFields(acc);
-        const readyCount = fieldOrder.filter((k) => partial[k] !== undefined).length;
-        if (readyCount > sentFieldCount) {
-          sentFieldCount = readyCount;
+        const json = JSON.stringify(partial);
+        // 直前と中身が同じなら送らない（構造上の記号だけが増えた等、
+        // 見た目に変化がないチャンクでの無駄な送信を減らす）
+        if (json !== lastSentJson) {
+          lastSentJson = json;
           onPartial(partial);
         }
       });
