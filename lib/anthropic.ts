@@ -288,12 +288,64 @@ ${persona}
 - 生徒のメモに出てくる固有名詞（生徒自身が作ったアプリ名等）は断定せず確認する形で答える。`;
 }
 
+// ストリーミング中、JSONがまだ閉じていない途中の生テキストから
+// 「値が確定したフィールド」だけを都度抜き出す。プロンプト側でキー順を
+// score → tsukkomi → correct → missed → mission に固定しているので、
+// 手前から順に「次のキーが始まっている（＝直前の値が閉じた）」ことを
+// もって確定とみなせる。文字列値は生JSONのエスケープのまま
+// `"${raw}"` として再度 JSON.parse することで安全にデコードする。
+function extractPartialGradeFields(acc: string): Partial<GradeResult> {
+  const partial: Partial<GradeResult> = {};
+
+  const scoreMatch = acc.match(/"score"\s*:\s*(\d+)/);
+  if (scoreMatch) partial.score = Number(scoreMatch[1]);
+
+  const decodeStringField = (key: string, nextKeyPattern: string): string | undefined => {
+    const re = new RegExp(`"${key}"\\s*:\\s*"((?:\\\\[\\s\\S]|[^"\\\\])*)"\\s*,\\s*(?=${nextKeyPattern})`);
+    const m = acc.match(re);
+    if (!m) return undefined;
+    try {
+      return JSON.parse(`"${m[1]}"`) as string;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const tsukkomi = decodeStringField('tsukkomi', '"correct"');
+  if (tsukkomi !== undefined) partial.tsukkomi = tsukkomi;
+
+  const correct = decodeStringField('correct', '"missed"');
+  if (correct !== undefined) partial.correct = correct;
+
+  const missedMatch = acc.match(/"missed"\s*:\s*(\[[^\]]*\])\s*,\s*(?="mission")/);
+  if (missedMatch) {
+    try {
+      partial.missed = JSON.parse(missedMatch[1]) as string[];
+    } catch {
+      // 途中の配列は無視（次のチャンクで揃う）
+    }
+  }
+
+  // mission は最後のフィールドなので、閉じ引用符の後に `}` が続くことで確定とみなす
+  const missionMatch = acc.match(/"mission"\s*:\s*"((?:\\[\s\S]|[^"\\])*)"\s*[\s\S]*?\}/);
+  if (missionMatch) {
+    try {
+      partial.mission = JSON.parse(`"${missionMatch[1]}"`) as string;
+    } catch {
+      // noop
+    }
+  }
+
+  return partial;
+}
+
 export async function gradeAnswer(
   term: string,
   note: string,
   userAnswer: string,
   coach: CoachType = 'osaka',
-  userName: string = 'あなた'
+  userName: string = 'あなた',
+  onPartial?: (partial: Partial<GradeResult>) => void
 ): Promise<GradeResult> {
   const body = userAnswer.trim() || '(わからん)';
   const prompt = buildGradePrompt(term, note, body, coach, userName);
@@ -312,20 +364,41 @@ export async function gradeAnswer(
     // 指示しており、日本語は1文字≒1トークン前後のため、以前の 1500 では
     // 表付きの解説が途中で切れて JSON が閉じられず、答えたのに毎回
     // 「AIの返事がうまく読み取れんかった」で捨てられることがあった。
-    const response = await anthropic.messages.create({
+    //
+    // ストリーミングで受けるのは、生成完了（15秒前後）までUIを固まらせず、
+    // 点数・ツッコミ・解説が出来上がった順に画面へ流し込むため。全量が
+    // 揃ってから返す処理自体は変えていない（DB書き込みは最後まで待つ）。
+    let acc = '';
+    let sentFieldCount = 0;
+    const fieldOrder: (keyof GradeResult)[] = ['score', 'tsukkomi', 'correct', 'missed', 'mission'];
+    const stream = anthropic.messages.stream({
       model: MODEL_ID,
       max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     });
 
-    if (response.stop_reason === 'max_tokens') {
-      console.error('Anthropic grade response was truncated at max_tokens. Raw text:', extractText(response.content));
+    if (onPartial) {
+      stream.on('text', (delta) => {
+        acc += delta;
+        const partial = extractPartialGradeFields(acc);
+        const readyCount = fieldOrder.filter((k) => partial[k] !== undefined).length;
+        if (readyCount > sentFieldCount) {
+          sentFieldCount = readyCount;
+          onPartial(partial);
+        }
+      });
+    }
+
+    const finalMessage = await stream.finalMessage();
+
+    if (finalMessage.stop_reason === 'max_tokens') {
+      console.error('Anthropic grade response was truncated at max_tokens. Raw text:', extractText(finalMessage.content));
       throw new GradeUnavailableError(
         'AIの解説が長すぎて途中で切れてもうた。もう一回「答える」を押してみて。'
       );
     }
 
-    text = extractText(response.content);
+    text = extractText(finalMessage.content);
   } catch (err) {
     if (err instanceof GradeUnavailableError) throw err;
     console.error('Anthropic grade API error:', err);

@@ -21,12 +21,15 @@ export default function Home() {
   const [view, setView] = useState<'home' | 'quiz' | 'result' | 'add' | 'session_summary'>('home');
   const [current, setCurrent] = useState<Term | null>(null);
   const [answer, setAnswer] = useState('');
+  // 採点結果はストリーミングで届く（点数→ツッコミ→解説→…の順に段階的に確定する）ため、
+  // score以外のフィールドは届くまでundefined。mission が入っていれば全項目が
+  // 揃った合図として扱う（プロンプト側でJSONの最後のキーに固定しているため）。
   const [result, setResult] = useState<{
     score: number;
-    tsukkomi: string;
-    correct: string;
-    missed: string[];
-    mission: string;
+    tsukkomi?: string;
+    correct?: string;
+    missed?: string[];
+    mission?: string;
     related?: string[];
   } | null>(null);
   // 表示中の result が「わからん」経由の申告かどうか。
@@ -305,6 +308,7 @@ export default function Home() {
     if (!current) return;
     setLoading(true);
     setError('');
+    setResult(null);
 
     const textToSubmit = overrideAnswer !== undefined ? overrideAnswer : answer;
     const wakaran = textToSubmit === '(わからん)';
@@ -330,11 +334,60 @@ export default function Home() {
         }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || '採点エラー');
+      if (!res.ok || !res.body) {
+        let msg = '採点でコケた。もう一回「答える」を押してみて。';
+        try {
+          const data = await res.json();
+          msg = data.error || msg;
+        } catch {
+          // レスポンスボディがJSONでない（ネットワーク断等）場合はデフォルトメッセージのまま
+        }
+        throw new Error(msg);
       }
+
+      // /api/grade はNDJSON（改行区切りJSON）でストリーミングされる。
+      // 点数・ツッコミ・解説・ミッションが出来上がった順に1行ずつ届くので、
+      // 15秒前後かかる生成の完了を待たず、届いた分から画面に反映していく。
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let finalPayload: { result: typeof result; updatedLevel: number; nextReviewAt: string; lastScore: number } | null = null;
+      let streamError: string | null = null;
+      let switchedToResultView = false;
+
+      const handleLine = (line: string) => {
+        if (!line.trim()) return;
+        const evt = JSON.parse(line);
+        if (evt.type === 'partial') {
+          setResult((prev) => ({ ...(prev ?? { score: evt.partial.score ?? 0 }), ...evt.partial }));
+          if (!switchedToResultView) {
+            switchedToResultView = true;
+            setView('result');
+          }
+        } else if (evt.type === 'final') {
+          finalPayload = evt;
+        } else if (evt.type === 'error') {
+          streamError = evt.error;
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, idx);
+          buf = buf.slice(idx + 1);
+          handleLine(line);
+        }
+      }
+      if (buf.trim()) handleLine(buf);
+
+      if (streamError) throw new Error(streamError);
+      if (!finalPayload) throw new Error('採点でコケた。もう一回「答える」を押してみて。');
+
+      const data = finalPayload as { result: NonNullable<typeof result>; updatedLevel: number; nextReviewAt: string; lastScore: number };
 
       setResult(data.result);
       setSessionScores((prev) => [...prev, data.result.score]);
@@ -367,7 +420,9 @@ export default function Home() {
   };
 
   const askChat = async (questionText?: string) => {
-    if (!current || !result) return;
+    // result.mission は解説ストリームの最後に届くフィールド。まだ届いていない
+    // ということは correct/mission もまだ空で、チャットに渡す文脈が揃っていない。
+    if (!current || !result || !result.mission) return;
     const question = (questionText || chatInput).trim();
     if (!question || chatLoading) return;
 
@@ -1326,7 +1381,7 @@ export default function Home() {
                   <Stamp score={result.score} isWakaran={isWakaranResult} />
                 </div>
                 <p className="mt-4 font-serif text-xl font-bold leading-relaxed text-[#1A1714]">
-                  「{result.tsukkomi}」
+                  {result.tsukkomi ? `「${result.tsukkomi}」` : '（考え中…）'}
                 </p>
               </div>
             </div>
@@ -1335,13 +1390,17 @@ export default function Home() {
             <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-5 shadow-[4px_4px_0_0_#1A1714]">
               <h3 className="font-serif text-lg font-bold text-[#1A1714]">ほんまのところ</h3>
 
-              <InteractiveExplanation
-                text={result.correct}
-                missedWords={result.missed}
-                relatedWords={result.related}
-                onWordClick={(word) => askChat(`「${word}」ってどういう意味？`)}
-                onAddTerm={handleAddQuickTerm}
-              />
+              {result.correct ? (
+                <InteractiveExplanation
+                  text={result.correct}
+                  missedWords={result.missed || []}
+                  relatedWords={result.related}
+                  onWordClick={(word) => askChat(`「${word}」ってどういう意味？`)}
+                  onAddTerm={handleAddQuickTerm}
+                />
+              ) : (
+                <p className="mt-2 text-sm text-[#1A1714]/50">解説を書いてるで…</p>
+              )}
             </div>
 
             {/* ミニ課題ミッション */}
@@ -1349,7 +1408,9 @@ export default function Home() {
               <h3 className="font-serif font-bold text-[#D9A441]">
                 今すぐ手を動かすミッション
               </h3>
-              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">{result.mission}</p>
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">
+                {result.mission || 'ミッションを考え中…'}
+              </p>
             </div>
 
             {/* 答えた後限定：聞き返しチャット */}
@@ -1368,42 +1429,42 @@ export default function Home() {
               <div className="flex flex-wrap gap-2 border-b border-[#1A1714]/15 bg-white/50 px-4 py-2.5">
                 <button
                   onClick={() => askChat('もっと簡単に小学生でもわかるように言い直して')}
-                  disabled={chatLoading}
+                  disabled={chatLoading || !result.mission}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] disabled:opacity-50"
                 >
                   もっと簡単に
                 </button>
                 <button
                   onClick={() => askChat('似ている他の用語と何が違うのか教えて')}
-                  disabled={chatLoading}
+                  disabled={chatLoading || !result.mission}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
                 >
                   他と何が違う？
                 </button>
                 <button
                   onClick={() => askChat('実際のコードのどこにどう書くのか具体例を見せて')}
-                  disabled={chatLoading}
+                  disabled={chatLoading || !result.mission}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
                 >
                   コードのどこに書く？
                 </button>
                 <button
                   onClick={() => askChat('実務や現場では具体的にどう使われる？使わないとどう困る？')}
-                  disabled={chatLoading}
+                  disabled={chatLoading || !result.mission}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
                 >
                   実務での使い道
                 </button>
                 <button
                   onClick={() => askChat('別の身近な日常シーン（料理・買い物など）に例えて説明して')}
-                  disabled={chatLoading}
+                  disabled={chatLoading || !result.mission}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
                 >
                   別の例えで
                 </button>
                 <button
                   onClick={() => askChat('流れや仕組みを分かりやすくテキスト図解して！')}
-                  disabled={chatLoading}
+                  disabled={chatLoading || !result.mission}
                   className="border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3]"
                 >
                   テキスト図解
@@ -1454,7 +1515,7 @@ export default function Home() {
                 />
                 <button
                   onClick={() => askChat()}
-                  disabled={chatLoading || !chatInput.trim()}
+                  disabled={chatLoading || !chatInput.trim() || !result.mission}
                   className="shrink-0 border-2 border-[#1A1714] bg-[#B83227] px-4 py-2 text-sm font-bold text-[#F7F1E3] hover:bg-[#9c2a20] disabled:bg-[#1A1714]/20 disabled:text-[#1A1714]/50"
                 >
                   聞く
@@ -1462,26 +1523,32 @@ export default function Home() {
               </div>
             </div>
 
-            {/* ナビゲーションボタン */}
+            {/* ナビゲーションボタン。
+                loading中（＝解説ストリームがまだ受信・保存の途中）に次へ進めてしまうと、
+                バックグラウンドで走り続けているストリーム処理が、後から出た次の問題の
+                result/session state を上書きしてしまう。揃うまでは押させない。 */}
             <div className="flex gap-2 pt-2">
               {sessionLimit > 0 && sessionIndex >= sessionLimit ? (
                 <button
                   onClick={() => setView('session_summary')}
-                  className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20] shadow-[3px_3px_0_0_#1A1714]"
+                  disabled={loading}
+                  className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20] shadow-[3px_3px_0_0_#1A1714] disabled:opacity-40"
                 >
                   🎉 {sessionLimit}問セッション完了！結果を見る
                 </button>
               ) : (
                 <button
                   onClick={() => startQuiz({ reset: false })}
-                  className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20]"
+                  disabled={loading}
+                  className="flex-1 border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] hover:bg-[#9c2a20] disabled:opacity-40"
                 >
-                  次のお題へ（{sessionIndex + 1}/{sessionLimit > 0 ? sessionLimit : '∞'}問）
+                  {loading ? '解説を仕上げ中…' : `次のお題へ（${sessionIndex + 1}/${sessionLimit > 0 ? sessionLimit : '∞'}問）`}
                 </button>
               )}
               <button
                 onClick={() => setView('home')}
-                className="border-2 border-[#1A1714] bg-[#F7F1E3] px-4 py-3 font-bold hover:bg-[#1A1714]/5"
+                disabled={loading}
+                className="border-2 border-[#1A1714] bg-[#F7F1E3] px-4 py-3 font-bold hover:bg-[#1A1714]/5 disabled:opacity-40"
               >
                 ホームへ戻る
               </button>
