@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
   <meta name="googlebot" content="noindex, nofollow">
   <meta property="og:title" content="忘れた頃にやってくる復習コーチ「覚える君」の仕組み">
-  <meta property="og:description" content="エビングハウスの忘却曲線に基づき、忘れかけた絶妙なタイミングで向こうから出題。声で説明し、その場ですぐ手を動かす復習ツールの仕組みを図解します。">
+  <meta property="og:description" content="エビングハウスの忘却曲線に基づき、忘れかけた絶妙なタイミングで向こうから出題。自分の言葉で説明し、その場ですぐ手を動かす復習ツールの仕組みを図解します。">
   <meta property="og:type" content="article">
   <title>忘れた頃にやってくる復習コーチ「覚える君」の仕組み</title>
   
@@ -57,6 +57,7 @@
       .md\:hidden { display: none !important; }
       .hidden.md\:block { display: block !important; }
       .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
       .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
       .md\:mb-20 { margin-bottom: 5rem !important; }
       .md\:py-16 { padding-top: 4rem !important; padding-bottom: 4rem !important; }
@@ -91,7 +92,7 @@
   </h1>
   <p class="text-lg text-ads-muted max-w-xl mx-auto leading-relaxed">
     「AIに聞けば分かる。でも、忘れたことは聞くことすらできない」<br>
-    忘却曲線 × 音声入力 × 実践ミッションで、学んだ知識を一生モノの武器に変える仕組みを図解します。
+    忘却曲線 × 自分の言葉で説明 × 実践ミッションで、学んだ知識を一生モノの武器に変える仕組みを図解します。
   </p>
 </div>
 
@@ -104,7 +105,7 @@
     <div class="flex-1">
       <p class="font-bold text-slate-900 mb-1">知識がザルのように抜ける悩みを解消</p>
       <p class="text-sm text-ads-muted leading-relaxed">
-        教材を放り込むだけでAIが用語を自動抽出。毎朝LINEに届く1分（3問）の音声クイズに答えるだけで、忘却曲線に沿って脳に焼き付きます。
+        教材を放り込むだけでAIが用語を自動抽出。毎朝LINEに届く1分（3問）の復習に答えるだけで、忘却曲線に沿って脳に焼き付きます。
       </p>
     </div>
     <div class="flex flex-wrap gap-2 sm:flex-col sm:items-end">
@@ -124,10 +125,10 @@
 <div class="bg-ads-surface border border-ads-border rounded-2xl p-6 md:p-10 mb-10 shadow-sm">
   <div class="text-center mb-8 md:mb-10">
     <p class="text-xl md:text-2xl font-black text-slate-900 mb-2">
-      資料を放り込み、<span class="text-red-600">声で答えて</span>、<span class="text-red-600">その場で手を動かす</span>
+      資料を放り込み、<span class="text-red-600">自分の言葉で説明し</span>、<span class="text-red-600">その場で手を動かす</span>
     </p>
     <p class="text-sm text-ads-muted">
-      教材PDF/HTML → Claude用語抽出 → LINE朝通知 → 音声説明＆AI採点 → Cursorミッション
+      教材PDF/HTML → Claude用語抽出 → LINE朝通知 → 自分の言葉で説明＆AI採点 → Cursorミッション
     </p>
   </div>
 
@@ -176,19 +177,19 @@
       <i data-lucide="arrow-down" class="w-5 h-5 text-slate-400 md:hidden"></i>
     </div>
 
-    <!-- 4. Voice & Mission -->
+    <!-- 4. Explanation & Mission -->
     <div class="flex flex-col items-center w-36 p-3 bg-red-500/5 border border-red-500/20 rounded-xl">
       <div class="w-14 h-14 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-2.5">
-        <i data-lucide="mic" class="w-7 h-7 text-red-600"></i>
+        <i data-lucide="message-square" class="w-7 h-7 text-red-600"></i>
       </div>
-      <div class="font-bold text-slate-900 text-sm">声で説明＆採点</div>
-      <div class="text-[11px] text-red-600/70 mt-0.5">ツッコミ＆Cursor課題</div>
+      <div class="font-bold text-slate-900 text-sm">自分の言葉で説明</div>
+      <div class="text-[11px] text-red-600/70 mt-0.5">ツッコミ・解説・課題</div>
     </div>
 
   </div>
 
   <p class="text-center text-xs text-ads-muted border-t border-ads-border pt-4">
-    💡 ユーザーは「朝開いて声で3問答える」だけ。登録の手間も復習のスケジュール管理も完全ゼロ。
+    💡 ユーザーは「朝開いて1分で答える」だけ。文字入力でも音声でも4択でも、状況に合わせて自由に回答可能。
   </p>
 </div>
 
@@ -253,7 +254,7 @@
         </li>
         <li class="flex items-start gap-2">
           <span class="text-emerald-600 font-bold">✓</span>
-          <span>声で説明し、その場でCursorを実行（現場で使える力へ）</span>
+          <span>自分の言葉で説明し、その場でCursorを実行（現場で使える力へ）</span>
         </li>
         <li class="flex items-start gap-2">
           <span class="text-emerald-600 font-bold">✓</span>
@@ -264,117 +265,139 @@
   </div>
 </div>
 
-<!-- SECTION 2: 実際の操作画面（スクショ再現） -->
+<!-- SECTION 2: 実際の操作画面（3ステップ詳細） -->
 <div class="mb-12">
   <div class="flex items-center gap-2 mb-4">
     <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black text-sm">
       <i data-lucide="monitor" class="w-4 h-4"></i>
     </div>
-    <h2 class="text-xl font-bold text-slate-900">実際の操作画面</h2>
+    <h2 class="text-xl font-bold text-slate-900">実際の操作画面（出題 → 採点 → ほんまのところ解説）</h2>
   </div>
 
   <p class="text-sm text-ads-muted mb-6 leading-relaxed">
-    暖色と和モダンな世界観。声で説明すると、大阪弁AIコーチが花丸スタンプで採点し、「今すぐ手を動かすミッション」を出題します。
+    暖色と和モダンな世界観。自分の言葉で説明すると、大阪弁AIコーチがユーモアたっぷりに採点し、身近なたとえ話と「今すぐ手を動かすミッション」で腹落ちさせます。
   </p>
 
-  <!-- Real UI Mockup 2-Step Container -->
-  <div class="bg-gradient-to-b from-[#df9e38] to-[#c78524] rounded-2xl p-4 md:p-6 shadow-xl border-2 border-stone-800">
+  <!-- Real UI Mockup 3-Step Container -->
+  <div class="bg-gradient-to-b from-[#df9e38] to-[#c78524] rounded-2xl p-4 md:p-6 shadow-xl border-2 border-stone-800 space-y-4">
     
+    <!-- TOP ROW: STEP 1 & STEP 2 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       
-      <!-- STEP 1: 出題・音声入力画面 -->
+      <!-- STEP 1: 出題画面 -->
       <div class="bg-[#fafaf9] rounded-xl p-4 shadow-lg border-2 border-stone-900 flex flex-col justify-between">
         <div>
-          <!-- Header info -->
           <div class="flex justify-between items-center text-[11px] font-bold border-b border-stone-300 pb-2 mb-3">
             <span class="bg-stone-900 text-white px-2 py-0.5 rounded text-[10px]">👦 大阪の兄ちゃん</span>
             <span class="text-stone-700">👤 カズ さん</span>
           </div>
 
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-xs font-bold text-red-700">第 1 / 3 問</span>
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-xs font-bold text-red-700">① 出題：第 1 / 3 問</span>
             <span class="text-[10px] text-stone-500">残り 3問</span>
           </div>
           <div class="w-full bg-stone-200 h-1.5 rounded-full overflow-hidden mb-3">
             <div class="bg-red-600 h-full w-1/3"></div>
           </div>
 
-          <!-- Term -->
           <div class="mb-3">
             <span class="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded border border-amber-300">web kougeki2</span>
             <h3 class="text-2xl font-black text-stone-900 font-mincho mt-1 tracking-wide">メッシュ構造</h3>
           </div>
 
-          <!-- Input Box -->
-          <div class="bg-white border-2 border-red-700 rounded-lg p-2.5 mb-3">
-            <p class="text-[10px] text-stone-400 font-bold mb-1">自分の言葉で説明してみて</p>
+          <!-- Input -->
+          <div class="bg-white border-2 border-red-700 rounded-lg p-2.5 mb-2.5">
+            <p class="text-[10px] text-stone-400 font-bold mb-1">自分の言葉で説明してみて（文字でも声でもOK）</p>
             <p class="text-xs text-stone-900 font-medium leading-relaxed">
               「網目のようなインターネットの構造のことだね。」
             </p>
           </div>
         </div>
 
-        <div>
-          <!-- Voice Button -->
-          <div class="flex items-center gap-2 mb-3 bg-stone-100 p-1.5 rounded border border-stone-300">
-            <span class="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 bg-white px-2 py-1 rounded border border-stone-300 shadow-sm">
-              <span class="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
-              声で説明する
-            </span>
-            <span class="text-[10px] text-stone-500">口に出す方が、ごまかしが効かへん</span>
+        <div class="grid grid-cols-3 gap-2 pt-2">
+          <div class="col-span-2 bg-red-700 text-white text-center py-2 rounded text-xs font-bold shadow">
+            答える
           </div>
-
-          <!-- Actions -->
-          <div class="grid grid-cols-3 gap-2">
-            <div class="col-span-2 bg-red-700 text-white text-center py-2 rounded text-xs font-bold shadow">
-              答える
-            </div>
-            <div class="bg-white text-stone-700 border border-stone-400 text-center py-2 rounded text-xs font-bold">
-              わからん
-            </div>
+          <div class="bg-white text-stone-700 border border-stone-400 text-center py-2 rounded text-xs font-bold">
+            わからん
           </div>
         </div>
       </div>
 
-      <!-- STEP 2: 採点・ミッション画面 -->
+      <!-- STEP 2: 採点画面 -->
       <div class="bg-[#fafaf9] rounded-xl p-4 shadow-lg border-2 border-stone-900 flex flex-col justify-between">
         <div>
-          <!-- Result Card with Stamp -->
-          <div class="relative bg-white border-2 border-stone-900 rounded-lg p-3 mb-3 shadow-sm">
+          <div class="flex justify-between items-center text-[11px] font-bold border-b border-stone-300 pb-2 mb-3">
+            <span class="text-xs font-bold text-red-700">② 採点結果・ツッコミ</span>
+            <span class="text-[10px] text-stone-500">今回のスコア: 65点</span>
+          </div>
+
+          <div class="relative bg-white border-2 border-stone-900 rounded-lg p-3.5 mb-3 shadow-sm">
             <!-- Stamp -->
-            <div class="absolute right-3 top-2 w-14 h-14 rounded-full border-2 border-red-600 flex flex-col items-center justify-center text-red-600 font-bold transform -rotate-12 bg-red-50/80 shadow-sm">
+            <div class="absolute right-3 top-3 w-14 h-14 rounded-full border-2 border-red-600 flex flex-col items-center justify-center text-red-600 font-bold transform -rotate-12 bg-red-50/80 shadow-sm">
               <span class="text-xs">よし</span>
               <span class="text-[10px]">65点</span>
             </div>
 
-            <p class="text-[10px] text-stone-500 font-bold mb-1">メッシュ構造 / 今回のスコア: 65点</p>
-            <p class="text-xs text-stone-900 font-bold leading-relaxed pr-12">
+            <p class="text-xs text-stone-900 font-bold leading-relaxed pr-14">
               「カズ、『網目のような構造』って言えたのはええ線いっとるで！けど『なぜ複数の経路が必要なんか』がちょっと抜けてもうたな。惜しい！」
             </p>
           </div>
 
-          <!-- Mission Box -->
-          <div class="bg-stone-900 text-white rounded-lg p-3 border-l-4 border-amber-400 mb-2">
-            <div class="flex items-center gap-1 text-[11px] font-bold text-amber-300 mb-1">
-              <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
-              今すぐ手を動かすミッション
-            </div>
-            <p class="text-[11px] text-stone-200 leading-snug">
-              スマホで『Googleマップ』を開いて経路検索してみろ！複数のルートが出るやろ？それがメッシュ構造の考え方や！
-            </p>
+          <!-- Quick Tip -->
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-950 leading-relaxed">
+            💡 <strong>AIコーチの設計思想</strong>：間違えても決して責めず、良い部分を褒めた上で「抜けていた視点」をピンポイントで補足。
           </div>
         </div>
 
         <div class="text-center pt-2">
-          <span class="inline-flex items-center gap-1 text-[11px] font-bold text-stone-800 bg-amber-200/80 px-3 py-1 rounded-full border border-amber-400">
-            次のお題へ ➔ （忘却曲線に従って自動保存）
+          <span class="text-[11px] text-stone-600 font-bold">
+            ▼ 下の「ほんまのところ解説」へ続く
           </span>
         </div>
       </div>
 
     </div>
 
-    <p class="text-center text-xs text-stone-900 font-bold mt-4">
+    <!-- BOTTOM ROW: STEP 3 (ほんまのところ解説 ＆ ミッション) -->
+    <div class="bg-[#fafaf9] rounded-xl p-4.5 shadow-lg border-2 border-stone-900">
+      <div class="flex items-center justify-between border-b border-stone-300 pb-2 mb-3">
+        <span class="text-xs font-black text-stone-900 flex items-center gap-1.5">
+          <i data-lucide="book-open" class="w-4 h-4 text-red-600"></i>
+          ③ ほんまのところ解説 ＆ 今すぐ手を動かすミッション
+        </span>
+        <span class="text-[10px] bg-red-100 text-red-800 font-bold px-2 py-0.5 rounded">極上のAI解説</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Explanation -->
+        <div class="bg-white border border-stone-300 rounded-lg p-3 text-xs leading-relaxed text-stone-800">
+          <p class="font-bold text-stone-900 mb-1 border-b border-stone-100 pb-1">💡 ほんまのところ（身近なたとえで腹落ち）</p>
+          <p class="text-stone-700">
+            メッシュ構造いうのは、ネットワークの<strong>『冗長性（バックアップ）』</strong>を高める設計や！<br>
+            一本道やと土砂崩れで通行止めになるけど、メッシュなら別の迂回路を通れる。<strong>実務ではAmazonの配送網やXの配信システム</strong>など『絶対に止まったらアカン仕組み』で使われとるで！
+          </p>
+        </div>
+
+        <!-- Mission -->
+        <div class="bg-stone-900 text-white rounded-lg p-3 border-l-4 border-amber-400 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-1.5 text-xs font-bold text-amber-300 mb-1">
+              <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
+              今すぐ手を動かすミッション
+            </div>
+            <p class="text-xs text-stone-200 leading-snug">
+              スマホで『Googleマップ』を開いて経路検索してみろ！複数のルート（電車・バス・歩き）が出るやろ？それがメッシュ構造の考え方や！
+            </p>
+          </div>
+          <p class="text-[10px] text-amber-200/80 pt-2 border-t border-stone-800 mt-2">
+            ※ ただ暗記するだけでなく、その場でアクションに繋げるから一生忘れない
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-xs text-stone-900 font-bold pt-1">
       実際のアプリ画面（Vercel稼働中：<code>oboeru-kun.vercel.app</code>）
     </p>
   </div>
@@ -429,9 +452,9 @@
           3
         </div>
         <div>
-          <p class="font-bold text-slate-900 text-sm mb-1">【コア価値】解説を見る前に「自分の声」で説明</p>
+          <p class="font-bold text-slate-900 text-sm mb-1">【コア価値】解説を見る前に「自分の言葉」で説明</p>
           <p class="text-xs text-ads-muted leading-relaxed">
-            「読んで分かった気になる（流暢性の錯覚）」を壊すため、出力を先に強制。マイクに向かって口に出して説明します。
+            「読んで分かった気になる（流暢性の錯覚）」を壊すため、出力を先に強制。キーボード入力でも音声でも、自分の言葉で言語化します。
           </p>
         </div>
       </div>
@@ -457,9 +480,9 @@
           5
         </div>
         <div>
-          <p class="font-bold text-slate-900 text-sm mb-1">「今すぐ手を動かすミッション」で現場スキルへ</p>
+          <p class="font-bold text-slate-900 text-sm mb-1">身近なたとえ話と「今すぐ手を動かすミッション」</p>
           <p class="text-xs text-ads-muted leading-relaxed">
-            単語を覚えるだけで終わらせず、その場でCursorやツールを開いて動かす課題を指示。知識を行動へ直結させます。
+            AmazonやGoogleマップなどの身近な実例で腹落ちさせ、その場で手を動かす課題を指示。知識を行動へ直結させます。
           </p>
         </div>
       </div>
@@ -471,9 +494,9 @@
           6
         </div>
         <div>
-          <p class="font-bold text-slate-900 text-sm mb-1">電車内や忙しい日は「特急・4択モード」でスキマ時間復習</p>
+          <p class="font-bold text-slate-900 text-sm mb-1">忙しい日や移動中は「特急・4択モード」でスキマ時間復習</p>
           <p class="text-xs text-ads-muted leading-relaxed">
-            声が出せない時でも、Claudeが即時生成した4択クイズでゼロ秒復習。学習の継続（ゼロの日撲滅）を徹底支援します。
+            時間がない時でも、Claudeが即時生成した4択クイズでゼロ秒復習。学習の継続（ゼロの日撲滅）を徹底支援します。
           </p>
         </div>
       </div>
@@ -514,7 +537,7 @@
       <ul class="space-y-2 text-xs text-slate-700 leading-relaxed">
         <li>・<strong>教材からのノイズ除去</strong>：「章タイトル」などの混入を防ぐため「他人に通じるか」の単独基準を確立。</li>
         <li>・<strong>挫折させないUI</strong>：「わからん」の正直申告を責めずに優しく拾う判定ロジック。</li>
-        <li>・<strong>スマホ音声入力</strong>：Web Speech APIの端末差を吸収し快適な操作性を確保。</li>
+        <li>・<strong>マルチデバイス対応</strong>：スマホ実機での音声入力（Web Speech API）の安定化。</li>
       </ul>
     </div>
   </div>

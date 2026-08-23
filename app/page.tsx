@@ -400,6 +400,7 @@ export default function Home() {
       let finalPayload: { result: typeof result; updatedLevel: number; nextReviewAt: string; lastScore: number } | null = null;
       let streamError: string | null = null;
       let switchedToResultView = false;
+      let hasTriggeredEffect = false;
 
       const handleLine = (line: string) => {
         if (!line.trim()) return;
@@ -409,6 +410,11 @@ export default function Home() {
           if (!switchedToResultView) {
             switchedToResultView = true;
             setView('result');
+          }
+          // 点数が届いた瞬間に即座にアニメーション（桜吹雪やシェイク）を発火！
+          if (!hasTriggeredEffect && typeof evt.partial.score === 'number') {
+            hasTriggeredEffect = true;
+            triggerScoreEffects(evt.partial.score, wakaran);
           }
         } else if (evt.type === 'final') {
           finalPayload = evt;
@@ -453,9 +459,10 @@ export default function Home() {
         setTerms(updatedTerms);
       }
 
-      // スコアに応じた演出を発火（80点以上は桜吹雪、50点未満はシェイク等）。
-      // 「わからん」の正直申告は演出で罰さない。
-      triggerScoreEffects(data.result.score, wakaran);
+      // 保険: partialで発火していなかった場合のみ最終スコアで発火
+      if (!hasTriggeredEffect) {
+        triggerScoreEffects(data.result.score, wakaran);
+      }
 
       setView('result');
     } catch (err: any) {
