@@ -69,3 +69,36 @@ export function triggerSessionCompleteEffects(avgScore: number) {
     colors: ['#B83227', '#D9A441', '#FFB7C5', '#FFFFFF'],
   });
 }
+
+/**
+ * 称号昇格（ランクアップ）時の特大ファンファーレ紙吹雪
+ */
+export function triggerRankUpEffects() {
+  if (typeof window === 'undefined') return;
+
+  const end = Date.now() + 2.5 * 1000;
+  const colors = ['#FFD700', '#FFA500', '#B83227', '#FF69B4', '#FFFFFF', '#00E676'];
+
+  (function frame() {
+    confetti({
+      particleCount: 5,
+      angle: 60,
+      spread: 70,
+      origin: { x: 0, y: 0.6 },
+      colors: colors,
+      scalar: 1.2,
+    });
+    confetti({
+      particleCount: 5,
+      angle: 120,
+      spread: 70,
+      origin: { x: 1, y: 0.6 },
+      colors: colors,
+      scalar: 1.2,
+    });
+
+    if (Date.now() < end) {
+      requestAnimationFrame(frame);
+    }
+  })();
+}

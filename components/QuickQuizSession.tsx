@@ -5,6 +5,8 @@ import { Term, getTermTag } from '@/lib/types';
 import { CoachType } from '@/lib/coach';
 import { MultipleChoiceQuiz, MultipleChoiceOption } from '@/lib/anthropic';
 import { triggerScoreEffects } from '@/lib/effects';
+import { isBossTerm } from '@/lib/learnerRank';
+import BossAlertBanner from '@/components/BossAlertBanner';
 
 interface QuickQuizSessionProps {
   term: Term;
@@ -147,8 +149,16 @@ export default function QuickQuizSession({
 
   const selectedChoice = selectedIndex !== null && quiz ? quiz.choices[selectedIndex] : null;
 
+  const bossInfo = isBossTerm(term);
+  const isDefeated = isAnswered && selectedIndex !== null && quiz?.choices[selectedIndex]?.isCorrect && bossInfo.isBoss;
+
   return (
     <div className="space-y-4">
+      {/* 苦手ボス出現・撃破バナー */}
+      {bossInfo.isBoss && (
+        <BossAlertBanner reason={bossInfo.reason} isDefeated={isDefeated} />
+      )}
+
       {/* 進行度バー */}
       {sessionLimit > 0 && (
         <div className="border-2 border-[#1A1714] bg-[#F7F1E3] px-4 py-2.5 shadow-[3px_3px_0_0_#1A1714]">

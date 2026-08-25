@@ -16,7 +16,17 @@ import { Term, getTermTag } from '@/lib/types';
 import { CoachType, COACH_LIST } from '@/lib/coach';
 import { todayStr } from '@/lib/date';
 import { INTERVALS, SCORE_KEEP } from '@/lib/constants';
-import { triggerScoreEffects, triggerSessionCompleteEffects } from '@/lib/effects';
+import { triggerScoreEffects, triggerSessionCompleteEffects, triggerRankUpEffects } from '@/lib/effects';
+import {
+  getLearnerStats,
+  getRankByReviews,
+  recordReviewStats,
+  isBossTerm,
+  LearnerRank,
+  LearnerStats,
+} from '@/lib/learnerRank';
+import RetentionMeter from '@/components/RetentionMeter';
+import BossAlertBanner from '@/components/BossAlertBanner';
 
 export default function Home() {
   const [terms, setTerms] = useState<Term[] | null>(null);
@@ -49,6 +59,19 @@ export default function Home() {
   const [sessionLimit, setSessionLimit] = useState<number>(3);
   const [sessionIndex, setSessionIndex] = useState<number>(1);
   const [sessionScores, setSessionScores] = useState<number[]>([]);
+  // 今回のセッションでのレベル変動履歴（リザルト画面表示用）
+  const [sessionLevelChanges, setSessionLevelChanges] = useState<
+    { term: string; fromLevel: number; toLevel: number; score: number; isBoss?: boolean }[]
+  >([]);
+  // 今回のセッションで昇格した称号ランク（昇格時にファンファーレ表示）
+  const [promotedRank, setPromotedRank] = useState<LearnerRank | null>(null);
+
+  // ユーザーの学習実績・称号ランク情報
+  const [learnerStats, setLearnerStats] = useState<LearnerStats>({
+    totalReviews: 0,
+    totalCorrect: 0,
+    currentRank: 1,
+  });
 
   // セッション開始時の出題条件。2問目以降も同じ条件で出題するために保持する。
   // これが無かった頃は「次のお題へ」が常に due（今日の復習）から引き直していたため、
@@ -104,13 +127,14 @@ export default function Home() {
     }
   };
 
-  // ユーザー名の初期読み込み
+  // ユーザー名＆学習実績（称号）の初期読み込み
   useEffect(() => {
     const savedName = localStorage.getItem('oboeru_user_name');
     if (savedName) {
       setUserName(savedName);
       setNameInput(savedName);
     }
+    setLearnerStats(getLearnerStats());
   }, []);
 
   const handleSaveName = (e: React.FormEvent) => {
@@ -173,13 +197,17 @@ export default function Home() {
     setShowCoachMenu(false);
   };
 
-  // セッション完了時の紙吹雪演出
+  // セッション完了時の紙吹雪演出（称号昇格時は特大ファンファーレ）
   useEffect(() => {
     if (view === 'session_summary' && sessionScores.length > 0) {
-      const avg = Math.round(sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length);
-      triggerSessionCompleteEffects(avg);
+      if (promotedRank) {
+        triggerRankUpEffects();
+      } else {
+        const avg = Math.round(sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length);
+        triggerSessionCompleteEffects(avg);
+      }
     }
-  }, [view, sessionScores]);
+  }, [view, sessionScores, promotedRank]);
 
   // 復習セッション中のスワイプバック／戻るボタン対策。
   // 以前は view が useState だけで履歴に乗らず、通勤中に1問だけ答えようとして
@@ -312,6 +340,8 @@ export default function Home() {
       setAskedIds([randomTerm.id]);
       setSessionIndex(1);
       setSessionScores([]);
+      setSessionLevelChanges([]);
+      setPromotedRank(null);
       // セッション開始時に履歴を1つ積む。popstate ハンドラ（上のuseEffect）と
       // 対になっており、これが無いと戻るジェスチャがアプリの外まで抜けてしまう。
       if (typeof window !== 'undefined') {
@@ -333,7 +363,26 @@ export default function Home() {
     lastScore: number;
   }) => {
     if (!current) return;
+    const bossInfo = isBossTerm(current);
     setSessionScores((prev) => [...prev, data.score]);
+    setSessionLevelChanges((prev) => [
+      ...prev,
+      {
+        term: current.term,
+        fromLevel: current.level,
+        toLevel: data.updatedLevel,
+        score: data.score,
+        isBoss: bossInfo.isBoss,
+      },
+    ]);
+
+    // 称号Statsの記録とランクアップ判定
+    const { newStats, promotedRank: rankUp } = recordReviewStats(1, data.isCorrect ? 1 : 0);
+    setLearnerStats(newStats);
+    if (rankUp) {
+      setPromotedRank(rankUp);
+    }
+
     if (terms) {
       const updatedTerms = terms.map((t) =>
         t.id === current.id
@@ -443,6 +492,26 @@ export default function Home() {
 
       setResult(data.result);
       setSessionScores((prev) => [...prev, data.result.score]);
+
+      const bossInfo = isBossTerm(current);
+      setSessionLevelChanges((prev) => [
+        ...prev,
+        {
+          term: current.term,
+          fromLevel: current.level,
+          toLevel: data.updatedLevel,
+          score: data.result.score,
+          isBoss: bossInfo.isBoss,
+        },
+      ]);
+
+      // 称号Statsの記録とランクアップ判定
+      const isCorrect = data.result.score >= 80;
+      const { newStats, promotedRank: rankUp } = recordReviewStats(1, isCorrect ? 1 : 0);
+      setLearnerStats(newStats);
+      if (rankUp) {
+        setPromotedRank(rankUp);
+      }
 
       // 用語状態を更新
       if (terms) {
@@ -874,23 +943,40 @@ export default function Home() {
             )}
           </div>
 
-          {/* ニックネーム設定ボタン */}
-          <button
-            onClick={() => {
-              setNameInput(userName);
-              setShowNameModal(true);
-            }}
-            className="flex items-center justify-between border-2 border-[#1A1714] bg-[#F7F1E3] px-3.5 py-2.5 shadow-[3px_3px_0_0_#1A1714] hover:bg-[#ede8d0] transition-colors"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xl shrink-0">👤</span>
-              <div className="text-left min-w-0">
-                <p className="font-mono text-[9px] font-bold tracking-wider text-[#1A1714]/60">LEARNER</p>
-                <p className="text-xs sm:text-sm font-bold text-[#B83227] truncate">{userName} さん</p>
-              </div>
-            </div>
-            <span className="font-mono text-[10px] text-[#1A1714]/50 shrink-0">✏️ 変更</span>
-          </button>
+          {/* 称号＆ニックネーム設定ボタン */}
+          {(() => {
+            const currentRank = getRankByReviews(learnerStats.totalReviews);
+            return (
+              <button
+                onClick={() => {
+                  setNameInput(userName);
+                  setShowNameModal(true);
+                }}
+                className="flex items-center justify-between border-2 border-[#1A1714] bg-[#F7F1E3] px-3 py-2 sm:px-3.5 sm:py-2.5 shadow-[3px_3px_0_0_#1A1714] hover:bg-[#ede8d0] transition-colors"
+                title={`累計復習: ${learnerStats.totalReviews}回（正解: ${learnerStats.totalCorrect}回）`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xl sm:text-2xl shrink-0" title={`称号ランク ${currentRank.rank}`}>
+                    {currentRank.icon}
+                  </span>
+                  <div className="text-left min-w-0">
+                    <div className="flex items-center gap-1">
+                      <p className="font-mono text-[9px] font-bold tracking-wider text-[#1A1714]/60">
+                        LEARNER <span className="text-[#8a6300]">Rank {currentRank.rank}</span>
+                      </p>
+                    </div>
+                    <p className="text-xs sm:text-sm font-bold text-[#B83227] truncate">
+                      <span className="text-[10px] sm:text-xs text-[#1A1714]/75 font-normal mr-0.5">
+                        {currentRank.title}
+                      </span>
+                      {userName} さん
+                    </p>
+                  </div>
+                </div>
+                <span className="font-mono text-[10px] text-[#1A1714]/50 shrink-0">✏️</span>
+              </button>
+            );
+          })()}
         </div>
 
         {error && (
@@ -902,6 +988,11 @@ export default function Home() {
         {/* 1. ホーム画面 (View === 'home') */}
         {view === 'home' && (
           <div className="space-y-5">
+            {/* 知識定着度メーター（常設） */}
+            {terms.length > 0 && (
+              <RetentionMeter terms={terms} coach={coach} userName={userName} />
+            )}
+
             {/* 分野・講義フィルタータブバー */}
             <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-3 shadow-[4px_4px_0_0_#1A1714]">
               <div className="flex items-center justify-between pb-2">
@@ -1321,7 +1412,14 @@ export default function Home() {
 
         {/* 2-B. 記述・出題・回答画面 (View === 'quiz') */}
         {view === 'quiz' && current && (
-          <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
+          <div className="space-y-4">
+            {/* 苦手ボス出現バナー */}
+            {(() => {
+              const boss = isBossTerm(current);
+              return boss.isBoss ? <BossAlertBanner reason={boss.reason} /> : null;
+            })()}
+
+            <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
             {/* セッション進行度バー */}
             {sessionLimit > 0 && (
               <div className="mb-4 border-b border-[#1A1714]/15 pb-3">
@@ -1404,8 +1502,8 @@ export default function Home() {
                 口に出す方が、ごまかしが効かへん
               </p>
             </div>
-
           </div>
+        </div>
         )}
 
         {/* 送信ボタンをカード外・画面下部に固定。
@@ -1438,6 +1536,14 @@ export default function Home() {
         {/* 3. 採点結果 & 聞き返しチャット画面 (View === 'result') */}
         {view === 'result' && result && current && (
           <div className="space-y-4">
+            {/* 苦手ボス撃破演出バナー */}
+            {(() => {
+              const boss = isBossTerm(current);
+              if (!boss.isBoss) return null;
+              const isDefeated = result.score >= 80;
+              return <BossAlertBanner reason={boss.reason} isDefeated={isDefeated} />;
+            })()}
+
             {/* セッション進行度バー */}
             {sessionLimit > 0 && (
               <div className="border-2 border-[#1A1714] bg-[#F7F1E3] px-4 py-2.5 shadow-[3px_3px_0_0_#1A1714]">
@@ -1679,6 +1785,26 @@ export default function Home() {
         {/* 4. セッション完了サマリー画面 (View === 'session_summary') */}
         {view === 'session_summary' && (
           <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714] space-y-5">
+            {/* 称号昇格（ランクアップ）特大ファンファーレバナー */}
+            {promotedRank && (
+              <div className="border-2 border-[#1A1714] bg-[#1A1714] p-5 text-center text-[#F7F1E3] shadow-[5px_5px_0_0_#D9A441] animate-bounce">
+                <p className="font-mono text-xs font-bold tracking-widest text-[#FFD700]">
+                  🎉 RANK UP! 称号昇格！
+                </p>
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <span className="text-3xl">{promotedRank.icon}</span>
+                  <h3 className="font-serif text-xl sm:text-2xl font-bold text-[#FFD700]">
+                    【{promotedRank.title} {userName}】
+                  </h3>
+                </div>
+                <div className="mt-3 border-t border-white/20 pt-2">
+                  <p className="text-xs sm:text-sm font-bold text-white/90">
+                    💬 「{promotedRank.coachMessage}」
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="text-center">
               <span className="text-5xl">🏆</span>
               <h2 className="mt-2 font-serif text-2xl font-bold text-[#1A1714]">
@@ -1713,6 +1839,54 @@ export default function Home() {
                 ))}
               </div>
             </div>
+
+            {/* 今回の記憶定着＆レベル変動リスト */}
+            {sessionLevelChanges.length > 0 && (
+              <div className="border-2 border-[#1A1714] bg-white p-4">
+                <div className="flex items-center justify-between border-b border-[#1A1714]/15 pb-2 mb-3">
+                  <p className="font-mono text-xs font-bold text-[#1A1714]/70">
+                    📈 今回の記憶定着＆レベル変動
+                  </p>
+                  <span className="font-mono text-[10px] text-[#1A1714]/50">全{sessionLevelChanges.length}問</span>
+                </div>
+                <div className="space-y-2">
+                  {sessionLevelChanges.map((item, idx) => {
+                    const isUp = item.toLevel > item.fromLevel;
+                    const isReset = item.score < 50;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between border-b border-[#1A1714]/10 pb-2 text-xs last:border-b-0 last:pb-0"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                          <span className="font-bold text-[#1A1714] truncate">{item.term}</span>
+                          {item.isBoss && (
+                            <span className="shrink-0 border border-[#B83227] bg-[#B83227]/10 px-1 py-0.2 font-mono text-[9px] font-bold text-[#B83227]">
+                              {item.score >= 80 ? '⚔️ 撃破' : '👹 ボス'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 font-mono shrink-0 font-bold">
+                          <span className="text-[#1A1714]/60">Lv.{item.fromLevel}</span>
+                          <span className="text-[#1A1714]/40">➔</span>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[11px] ${
+                              isUp
+                                ? 'bg-[#2e7d32]/10 text-[#2e7d32]'
+                                : isReset
+                                ? 'bg-[#B83227]/10 text-[#B83227]'
+                                : 'bg-[#1A1714]/5 text-[#1A1714]'
+                            }`}
+                          >
+                            Lv.{item.toLevel} {isUp ? '🆙' : isReset ? '⚠️' : ''}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* コーチの激励 */}
             <div className="border-l-4 border-[#D9A441] bg-[#D9A441]/15 px-4 py-3">
