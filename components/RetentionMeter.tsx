@@ -31,32 +31,28 @@ export default function RetentionMeter({ terms, coach = 'osaka', userName = 'カ
   const learningPct = stats.totalTerms > 0 ? (stats.learningCount / stats.totalTerms) * 100 : 0;
 
   return (
-    <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
-      {/* ヘッダー部分 */}
+    <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-3 sm:p-4 shadow-[3px_3px_0_0_#1A1714]">
+      {/* ヘッダー＆定着率 */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">🧠</span>
-          <div>
-            <p className="font-mono text-[9px] font-bold tracking-wider text-[#1A1714]/60">
-              RETENTION STATUS
-            </p>
-            <h4 className="font-serif text-sm sm:text-base font-bold text-[#1A1714]">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-lg shrink-0">🧠</span>
+          <div className="min-w-0">
+            <h4 className="font-serif text-xs sm:text-sm font-bold text-[#1A1714] truncate">
               知識の定着度メーター
             </h4>
           </div>
         </div>
-        <div className="text-right">
-          <p className="font-mono text-2xl sm:text-3xl font-bold leading-none text-[#B83227]">
+        <div className="flex items-baseline gap-1 shrink-0">
+          <span className="font-mono text-xl sm:text-2xl font-bold leading-none text-[#B83227]">
             {stats.retentionRate}
-            <span className="text-xs font-sans font-bold text-[#1A1714] ml-0.5">%</span>
-          </p>
-          <p className="font-mono text-[9px] text-[#1A1714]/60">定着率</p>
+          </span>
+          <span className="font-mono text-[10px] font-bold text-[#1A1714]/60">% 定着</span>
         </div>
       </div>
 
       {/* 3色プログレスバー */}
-      <div className="mt-3">
-        <div className="relative flex h-3.5 w-full overflow-hidden rounded-full border-2 border-[#1A1714] bg-stone-200">
+      <div className="mt-2">
+        <div className="relative flex h-2.5 sm:h-3 w-full overflow-hidden rounded-full border border-[#1A1714] bg-stone-200">
           {/* 殿堂入り (Lv.4) - 深緑 */}
           <div
             style={{ width: `${masteredPct}%` }}
@@ -78,25 +74,25 @@ export default function RetentionMeter({ terms, coach = 'osaka', userName = 'カ
         </div>
 
         {/* 凡例 & 内訳 */}
-        <div className="mt-2 flex items-center justify-between text-[10px] sm:text-xs font-mono font-bold">
+        <div className="mt-1.5 flex items-center justify-between text-[9px] sm:text-[11px] font-mono font-bold">
           <div className="flex items-center gap-1 text-[#2e7d32]">
-            <span className="h-2 w-2 rounded-full bg-[#2e7d32]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-[#2e7d32]" />
             <span>殿堂入り(Lv4): {stats.masteredCount}</span>
           </div>
           <div className="flex items-center gap-1 text-[#8a6300]">
-            <span className="h-2 w-2 rounded-full bg-[#D9A441]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-[#D9A441]" />
             <span>定着中(Lv2-3): {stats.inProgressCount}</span>
           </div>
           <div className="flex items-center gap-1 text-[#B83227]">
-            <span className="h-2 w-2 rounded-full bg-[#B83227]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-[#B83227]" />
             <span>覚えたて(Lv0-1): {stats.learningCount}</span>
           </div>
         </div>
       </div>
 
       {/* コーチの励ましメッセージ */}
-      <div className="mt-3 border-t border-[#1A1714]/15 pt-2.5">
-        <p className="text-xs text-[#1A1714]/80 leading-relaxed font-bold">
+      <div className="mt-2 border-t border-[#1A1714]/10 pt-1.5">
+        <p className="text-[11px] sm:text-xs text-[#1A1714]/80 leading-tight font-bold truncate">
           💬 {encourageMsg}
         </p>
       </div>

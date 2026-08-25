@@ -987,33 +987,243 @@ export default function Home() {
 
         {/* 1. ホーム画面 (View === 'home') */}
         {view === 'home' && (
-          <div className="space-y-5">
-            {/* 知識定着度メーター（常設） */}
+          <div className="space-y-3.5 sm:space-y-4">
+            {/* 復習・特訓状況カード（最優先アクション：開いた瞬間に解ける） */}
+            {terms.length === 0 ? (
+              // 初回ユーザー向けの空状態
+              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-6 shadow-[4px_4px_0_0_#1A1714]">
+                <h3 className="font-serif text-lg sm:text-xl font-bold text-[#1A1714]">
+                  まだ用語が1件もないで
+                </h3>
+                <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-[#1A1714]/80">
+                  覚える君は、説明を「読む」んやなくて「自分の言葉で書く」ことで記憶に残す復習コーチや。
+                  まずは覚えたい用語を1件登録してみて。
+                </p>
+
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    onClick={() => setShowImporter(true)}
+                    className="w-full border-2 border-[#1A1714] bg-[#1A1714] px-4 py-2.5 text-sm font-bold text-[#F7F1E3] transition hover:bg-[#332f2b]"
+                  >
+                    📄 講義資料から一気に取り込む
+                  </button>
+                  <button
+                    onClick={() => setView('add')}
+                    className="w-full border-2 border-[#1A1714] bg-white px-4 py-2 text-xs sm:text-sm font-bold transition hover:bg-[#1A1714]/5"
+                  >
+                    ✏️ 手で1つ入れてみる
+                  </button>
+                  <button
+                    onClick={handleAddSampleTerms}
+                    className="w-full border border-[#1A1714]/40 bg-transparent px-4 py-1.5 text-xs font-bold text-[#1A1714]/70 underline transition hover:text-[#1A1714]"
+                  >
+                    まずはサンプル用語で1問試してみる
+                  </button>
+                </div>
+              </div>
+            ) : selectedTag !== 'all' && selectedTag !== 'due' ? (
+              // 選択された特定分野の集中特訓カード
+              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
+                <div className="flex items-center justify-between">
+                  <span className="inline-block border border-[#1A1714] bg-[#D9A441]/20 px-2 py-0.5 font-mono text-[10px] sm:text-xs font-bold text-[#1A1714]">
+                    🏷️ 集中特訓モード
+                  </span>
+                  <span className="text-[11px] font-mono font-bold text-[#1A1714]/70">
+                    今日復習: {filteredDue.length}件 / 全{filteredTerms.length}件
+                  </span>
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-serif text-xl sm:text-2xl font-bold text-[#1A1714]">
+                    {selectedTag}
+                  </h3>
+                  <button
+                    onClick={() => setRenamingTag(selectedTag)}
+                    className="flex items-center gap-1 border border-[#1A1714] bg-white px-2 py-0.5 text-xs font-bold text-[#1A1714] hover:bg-[#1A1714] hover:text-white transition-colors shadow-[2px_2px_0_0_#1A1714]"
+                    title="この分野の名前を一括変更する"
+                  >
+                    ✏️ 名前変更
+                  </button>
+                </div>
+
+                {/* 問題数コース選択 */}
+                <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
+                  <p className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/70 mb-1">何問チャレンジする？</p>
+                  <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
+                    {[
+                      { count: 3, label: '3問', time: '1分' },
+                      { count: 5, label: '5問', time: '3分' },
+                      { count: 10, label: '10問', time: '5分' },
+                      { count: 0, label: '全問', time: '無制限' },
+                    ].map((c) => (
+                      <button
+                        key={c.count}
+                        onClick={() => setSessionLimit(c.count)}
+                        className={`border-2 p-1 text-center transition-all ${
+                          sessionLimit === c.count
+                            ? 'border-[#1A1714] bg-[#1A1714] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#D9A441]'
+                            : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
+                        }`}
+                      >
+                        <p className="font-bold text-xs">{c.label}</p>
+                        <p className="text-[9px] opacity-70">{c.time}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-3.5 flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => startQuiz({ forceAll: true, tag: selectedTag, reset: true, mode: 'standard' })}
+                    disabled={filteredTerms.length === 0}
+                    className="flex-1 border-2 border-[#1A1714] bg-[#1A1714] px-4 py-2.5 font-bold text-[#F7F1E3] transition hover:bg-[#332f2b] text-xs sm:text-sm"
+                  >
+                    ✍️ 【{selectedTag}】を記述特訓 ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
+                  </button>
+                  <button
+                    onClick={() => startQuiz({ forceAll: true, tag: selectedTag, reset: true, mode: 'quick' })}
+                    disabled={filteredTerms.length === 0}
+                    className="border-2 border-[#1A1714] bg-[#D9A441] px-4 py-2.5 font-bold text-[#1A1714] transition hover:bg-[#c99534] shadow-[2px_2px_0_0_#1A1714] text-xs sm:text-sm"
+                  >
+                    ⚡ 4択で特訓
+                  </button>
+                </div>
+              </div>
+            ) : due.length > 0 ? (
+              // 今日の復習カード（最重要メインカード）
+              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-[#1A1714]/70">今日復習する用語</p>
+                    <p className="font-serif text-4xl sm:text-5xl font-bold leading-none text-[#1A1714] mt-1">
+                      {due.length}
+                      <span className="ml-1.5 font-sans text-sm font-normal text-[#1A1714]/80">件</span>
+                    </p>
+                  </div>
+                  <span className="font-mono text-[11px] text-[#B83227] font-bold bg-[#B83227]/10 px-2 py-1 border border-[#B83227]/30">
+                    全 {due.length} 件が待機中
+                  </span>
+                </div>
+
+                {/* 問題数コース選択 */}
+                <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
+                  <p className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/70 mb-1">今日のペースを選ぶ</p>
+                  <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
+                    {[
+                      { count: 3, label: '3問', time: '1分' },
+                      { count: 5, label: '5問', time: '3分' },
+                      { count: 10, label: '10問', time: '5分' },
+                      { count: 0, label: '全問', time: '無制限' },
+                    ].map((c) => (
+                      <button
+                        key={c.count}
+                        onClick={() => setSessionLimit(c.count)}
+                        className={`border-2 p-1 text-center transition-all ${
+                          sessionLimit === c.count
+                            ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#1A1714]'
+                            : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
+                        }`}
+                      >
+                        <p className="font-bold text-xs">{c.label}</p>
+                        <p className="text-[9px] opacity-70">{c.time}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 出題開始ボタン */}
+                <div className="mt-3.5 space-y-2">
+                  <button
+                    onClick={() => startQuiz({ reset: true, mode: 'standard' })}
+                    className="w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#9c2a20] flex items-center justify-center gap-2 text-sm sm:text-base"
+                  >
+                    <span>✍️</span>
+                    <span>{sessionLimit > 0 ? `自分の言葉で ${sessionLimit} 問復習する` : '全問じっくりチャレンジする'}</span>
+                  </button>
+                  <button
+                    onClick={() => startQuiz({ reset: true, mode: 'quick' })}
+                    className="w-full border-2 border-[#1A1714] bg-[#D9A441] px-4 py-2 font-bold text-[#1A1714] shadow-[2px_2px_0_0_#1A1714] transition hover:bg-[#c99534] flex items-center justify-center gap-1.5 text-xs sm:text-sm"
+                  >
+                    <span>⚡️</span>
+                    <span>特急・4択モードで復習する（スキマ時間・電車用）</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // 本日のノルマ完了カード
+              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl sm:text-3xl">🎉</span>
+                  <div>
+                    <h3 className="font-serif text-lg sm:text-xl font-bold text-[#1A1714]">本日の復習はすべて完了！</h3>
+                    <p className="text-[10px] font-mono font-bold text-[#8a6300]">ALL CLEAR TODAY</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs sm:text-sm font-bold leading-relaxed text-[#1A1714]/80">
+                  「{getCompletionMessage(coach)}」
+                </p>
+
+                {/* レベル分布ミニバー */}
+                <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
+                  <p className="text-[10px] font-bold text-[#1A1714]/60 mb-1.5">定着レベル分布（全 {terms.length} 件）</p>
+                  <div className="grid grid-cols-5 gap-1 text-center font-mono text-xs">
+                    {levelCounts.map((count, lvl) => (
+                      <div key={lvl} className="border border-[#1A1714]/30 bg-white/70 p-1">
+                        <p className="text-[9px] text-[#1A1714]/60">Lv.{lvl}</p>
+                        <p className="font-bold text-xs text-[#1A1714]">{count}<span className="text-[9px] font-normal">件</span></p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'standard' })}
+                    className="border-2 border-[#1A1714] bg-white px-3 py-2 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] transition-colors"
+                  >
+                    ✍️ 先取り復習 ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
+                  </button>
+                  <button
+                    onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'quick' })}
+                    className="border-2 border-[#1A1714] bg-[#D9A441]/20 px-3 py-2 text-xs font-bold text-[#8a6300] hover:bg-[#D9A441] hover:text-[#1A1714] transition-colors"
+                  >
+                    ⚡ 4択で先取り
+                  </button>
+                  <button
+                    onClick={() => setView('add')}
+                    className="border-2 border-[#1A1714] bg-[#B83227] px-3 py-2 text-xs font-bold text-[#F7F1E3] hover:bg-[#9c2a20] transition-colors"
+                  >
+                    + 新しい用語を追加
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 知識定着度メーター（スリム常設） */}
             {terms.length > 0 && (
               <RetentionMeter terms={terms} coach={coach} userName={userName} />
             )}
 
             {/* 分野・講義フィルタータブバー */}
-            <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-3 shadow-[4px_4px_0_0_#1A1714]">
-              <div className="flex items-center justify-between pb-2">
-                <p className="font-mono text-[10px] font-bold tracking-wider text-[#1A1714]/60">
+            <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-2.5 sm:p-3 shadow-[3px_3px_0_0_#1A1714]">
+              <div className="flex items-center justify-between pb-1.5">
+                <p className="font-mono text-[9px] sm:text-[10px] font-bold tracking-wider text-[#1A1714]/60">
                   🏷️ 分野・講義で集中特訓フィルター
                 </p>
                 {selectedTag !== 'all' && (
                   <button
                     onClick={() => setSelectedTag('all')}
-                    className="font-mono text-[10px] font-bold text-[#B83227] underline"
+                    className="font-mono text-[9px] sm:text-[10px] font-bold text-[#B83227] underline"
                   >
                     リセット
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
+              <div className="flex flex-wrap gap-1 overflow-x-auto pb-0.5">
                 <button
                   onClick={() => setSelectedTag('all')}
-                  className={`border px-2.5 py-1 font-mono text-xs font-bold transition-all ${
+                  className={`border px-2 py-0.5 font-mono text-[11px] sm:text-xs font-bold transition-all ${
                     selectedTag === 'all'
-                      ? 'border-[#1A1714] bg-[#1A1714] text-[#F7F1E3] shadow-[2px_2px_0_0_#B83227]'
+                      ? 'border-[#1A1714] bg-[#1A1714] text-[#F7F1E3] shadow-[1px_1px_0_0_#B83227]'
                       : 'border-[#1A1714]/40 bg-white text-[#1A1714] hover:border-[#1A1714]'
                   }`}
                 >
@@ -1021,9 +1231,9 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => setSelectedTag('due')}
-                  className={`border px-2.5 py-1 font-mono text-xs font-bold transition-all ${
+                  className={`border px-2 py-0.5 font-mono text-[11px] sm:text-xs font-bold transition-all ${
                     selectedTag === 'due'
-                      ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] shadow-[2px_2px_0_0_#1A1714]'
+                      ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] shadow-[1px_1px_0_0_#1A1714]'
                       : 'border-[#B83227]/50 bg-white text-[#B83227] hover:border-[#B83227]'
                   }`}
                 >
@@ -1033,14 +1243,14 @@ export default function Home() {
                   <button
                     key={stat.name}
                     onClick={() => setSelectedTag(stat.name)}
-                    className={`flex items-center gap-1 border px-2.5 py-1 text-xs font-bold transition-all ${
+                    className={`flex items-center gap-1 border px-2 py-0.5 text-[11px] sm:text-xs font-bold transition-all ${
                       selectedTag === stat.name
-                        ? 'border-[#1A1714] bg-[#1A1714] text-[#F7F1E3] shadow-[2px_2px_0_0_#D9A441]'
+                        ? 'border-[#1A1714] bg-[#1A1714] text-[#F7F1E3] shadow-[1px_1px_0_0_#D9A441]'
                         : 'border-[#1A1714]/30 bg-white text-[#1A1714] hover:border-[#1A1714]'
                     }`}
                   >
                     <span>{stat.name}</span>
-                    <span className="font-mono text-[10px] opacity-70">({stat.total})</span>
+                    <span className="font-mono text-[9px] opacity-70">({stat.total})</span>
                     {stat.due > 0 && (
                       <span className="h-1.5 w-1.5 rounded-full bg-[#B83227]" title={`今日復習 ${stat.due}件`} />
                     )}
@@ -1048,217 +1258,6 @@ export default function Home() {
                 ))}
               </div>
             </div>
-
-            {/* 復習・特訓状況カード */}
-            {terms.length === 0 ? (
-              // 初回ユーザー向けの空状態。
-              // 以前はここが「今日の復習はすべて完了！🎉」の完了カードに落ちてしまい、
-              // 何も登録していない人が祝われた上に、押せるボタンは
-              // 「出題できる用語がありません」というエラーを返していた。
-              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
-                <h3 className="font-serif text-xl font-bold text-[#1A1714]">
-                  まだ用語が1件もないで
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-[#1A1714]/80">
-                  覚える君は、説明を「読む」んやなくて「自分の言葉で書く」ことで記憶に残す復習コーチや。
-                  まずは覚えたい用語を1件登録してみて。
-                </p>
-
-                <div className="mt-5 flex flex-col gap-2">
-                  <button
-                    onClick={() => setShowImporter(true)}
-                    className="w-full border-2 border-[#1A1714] bg-[#1A1714] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#332f2b]"
-                  >
-                    📄 講義資料から一気に取り込む
-                  </button>
-                  <button
-                    onClick={() => setView('add')}
-                    className="w-full border-2 border-[#1A1714] bg-white px-4 py-2.5 text-sm font-bold transition hover:bg-[#1A1714]/5"
-                  >
-                    ✏️ 手で1つ入れてみる
-                  </button>
-                  <button
-                    onClick={handleAddSampleTerms}
-                    className="w-full border border-[#1A1714]/40 bg-transparent px-4 py-2 text-xs font-bold text-[#1A1714]/70 underline transition hover:text-[#1A1714]"
-                  >
-                    まずはサンプル用語で1問試してみる
-                  </button>
-                </div>
-              </div>
-            ) : selectedTag !== 'all' && selectedTag !== 'due' ? (
-              // 選択された特定分野の集中特訓カード
-              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
-                <div className="flex items-center justify-between">
-                  <span className="inline-block border border-[#1A1714] bg-[#D9A441]/20 px-2 py-0.5 font-mono text-xs font-bold text-[#1A1714]">
-                    🏷️ 集中特訓モード
-                  </span>
-                  <span className="text-xs text-[#1A1714]/60">
-                    今日復習: {filteredDue.length}件 / 全{filteredTerms.length}件
-                  </span>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-serif text-2xl font-bold text-[#1A1714]">
-                    {selectedTag}
-                  </h3>
-                  <button
-                    onClick={() => setRenamingTag(selectedTag)}
-                    className="flex items-center gap-1 border border-[#1A1714] bg-white px-2.5 py-1 text-xs font-bold text-[#1A1714] hover:bg-[#1A1714] hover:text-white transition-colors shadow-[2px_2px_0_0_#1A1714]"
-                    title="この分野の名前を一括変更する"
-                  >
-                    ✏️ 分野名を変更
-                  </button>
-                </div>
-                <p className="mt-1 text-xs text-[#1A1714]/70">
-                  この分野の用語だけを集中して叩き込みます。
-                </p>
-
-                {/* 問題数コース選択 */}
-                <div className="mt-4 border-t border-[#1A1714]/15 pt-3">
-                  <p className="text-[11px] font-bold text-[#1A1714]/70 mb-1.5">何問チャレンジする？</p>
-                  <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
-                    {[
-                      { count: 3, label: '3問', time: '1分' },
-                      { count: 5, label: '5問', time: '3分' },
-                      { count: 10, label: '10問', time: '5分' },
-                      { count: 0, label: '全問', time: '無制限' },
-                    ].map((c) => (
-                      <button
-                        key={c.count}
-                        onClick={() => setSessionLimit(c.count)}
-                        className={`border-2 p-1.5 text-center transition-all ${
-                          sessionLimit === c.count
-                            ? 'border-[#1A1714] bg-[#1A1714] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#D9A441]'
-                            : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
-                        }`}
-                      >
-                        <p className="font-bold">{c.label}</p>
-                        <p className="text-[9px] opacity-70">{c.time}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-col sm:flex-row gap-2">
-                  <button
-                    onClick={() => startQuiz({ forceAll: true, tag: selectedTag, reset: true, mode: 'standard' })}
-                    disabled={filteredTerms.length === 0}
-                    className="flex-1 border-2 border-[#1A1714] bg-[#1A1714] px-4 py-3 font-bold text-[#F7F1E3] transition hover:bg-[#332f2b]"
-                  >
-                    ✍️ 【{selectedTag}】を記述特訓 ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
-                  </button>
-                  <button
-                    onClick={() => startQuiz({ forceAll: true, tag: selectedTag, reset: true, mode: 'quick' })}
-                    disabled={filteredTerms.length === 0}
-                    className="border-2 border-[#1A1714] bg-[#D9A441] px-4 py-3 font-bold text-[#1A1714] transition hover:bg-[#c99534] shadow-[2px_2px_0_0_#1A1714]"
-                  >
-                    ⚡ 4択で特訓
-                  </button>
-                </div>
-              </div>
-            ) : due.length > 0 ? (
-              // 今日の復習カード
-              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-[#1A1714]/70">今日復習する用語</p>
-                  <span className="font-mono text-xs text-[#B83227] font-bold">全 {due.length} 件が待機中</span>
-                </div>
-                <p className="font-serif text-6xl font-bold leading-none text-[#1A1714]">
-                  {due.length}
-                  <span className="ml-2 font-sans text-base font-normal">件</span>
-                </p>
-
-                {/* 問題数コース選択 */}
-                <div className="mt-4 border-t border-[#1A1714]/15 pt-3">
-                  <p className="text-[11px] font-bold text-[#1A1714]/70 mb-1.5">今日のペースを選ぶ</p>
-                  <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
-                    {[
-                      { count: 3, label: '3問', time: '1分' },
-                      { count: 5, label: '5問', time: '3分' },
-                      { count: 10, label: '10問', time: '5分' },
-                      { count: 0, label: '全問', time: '無制限' },
-                    ].map((c) => (
-                      <button
-                        key={c.count}
-                        onClick={() => setSessionLimit(c.count)}
-                        className={`border-2 p-1.5 text-center transition-all ${
-                          sessionLimit === c.count
-                            ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#1A1714]'
-                            : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
-                        }`}
-                      >
-                        <p className="font-bold">{c.label}</p>
-                        <p className="text-[9px] opacity-70">{c.time}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-5 space-y-2.5">
-                  <button
-                    onClick={() => startQuiz({ reset: true, mode: 'standard' })}
-                    className="w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3.5 font-bold text-[#F7F1E3] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#9c2a20] flex items-center justify-center gap-2"
-                  >
-                    <span>✍️</span>
-                    <span>{sessionLimit > 0 ? `自分の言葉で ${sessionLimit} 問復習する` : '全問じっくりチャレンジする'}</span>
-                  </button>
-                  <button
-                    onClick={() => startQuiz({ reset: true, mode: 'quick' })}
-                    className="w-full border-2 border-[#1A1714] bg-[#D9A441] px-4 py-2.5 font-bold text-[#1A1714] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#c99534] flex items-center justify-center gap-2 text-xs sm:text-sm"
-                  >
-                    <span>⚡️</span>
-                    <span>特急・4択モードで復習する（スキマ時間・電車用）</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              // 本日のノルマ完了カード
-              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-6 shadow-[6px_6px_0_0_#1A1714]">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">🎉</span>
-                  <div>
-                    <h3 className="font-serif text-xl font-bold text-[#1A1714]">本日の復習はすべて完了！</h3>
-                    <p className="text-xs font-bold text-[#8a6300]">ALL CLEAR TODAY</p>
-                  </div>
-                </div>
-                <p className="mt-3 text-sm font-bold leading-relaxed text-[#1A1714]/80">
-                  「{getCompletionMessage(coach)}」
-                </p>
-
-                {/* レベル分布ミニバー */}
-                <div className="mt-4 border-t border-[#1A1714]/15 pt-3">
-                  <p className="text-[11px] font-bold text-[#1A1714]/60 mb-2">定着レベル分布（全 {terms.length} 件）</p>
-                  <div className="grid grid-cols-5 gap-1 text-center font-mono text-xs">
-                    {levelCounts.map((count, lvl) => (
-                      <div key={lvl} className="border border-[#1A1714]/30 bg-white/70 p-1.5">
-                        <p className="text-[10px] text-[#1A1714]/60">Lv.{lvl}</p>
-                        <p className="font-bold text-[#1A1714]">{count}<span className="text-[10px] font-normal">件</span></p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'standard' })}
-                    className="border-2 border-[#1A1714] bg-white px-3 py-2.5 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] transition-colors"
-                  >
-                    ✍️ 先取り復習 ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
-                  </button>
-                  <button
-                    onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'quick' })}
-                    className="border-2 border-[#1A1714] bg-[#D9A441]/20 px-3 py-2.5 text-xs font-bold text-[#8a6300] hover:bg-[#D9A441] hover:text-[#1A1714] transition-colors"
-                  >
-                    ⚡ 4択で先取り
-                  </button>
-                  <button
-                    onClick={() => setView('add')}
-                    className="border-2 border-[#1A1714] bg-[#B83227] px-3 py-2.5 text-xs font-bold text-[#F7F1E3] hover:bg-[#9c2a20] transition-colors"
-                  >
-                    + 新しい用語を追加
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* 用語一覧 */}
             <div className="border-2 border-[#1A1714] bg-[#F7F1E3] shadow-[6px_6px_0_0_#1A1714]">
