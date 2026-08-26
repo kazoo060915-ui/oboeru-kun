@@ -103,7 +103,7 @@ async function handleNotification(req: NextRequest) {
         });
 
         if (lineRes.ok) {
-          console.log(`LINE notification sent successfully to user ${lineUserId.slice(0, 6)}`);
+          console.log(`LINE notification sent successfully to user ${lineUserId.slice(0, 8)}...`);
           results.line = 'sent';
         } else {
           // 原因（トークン失効・ID間違い・無料枠切れ）が本文に入るのでログに残す
