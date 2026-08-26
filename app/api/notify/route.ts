@@ -82,16 +82,6 @@ async function handleNotification(req: NextRequest) {
     const results: Record<string, string> = {};
 
     // 1. LINE 通知送信（Messaging API の push）
-    //
-    // 旧実装は LINE Notify（notify-api.line.me）を叩いていたが、
-    // LINE Notify は 2025-03-31 でサービス終了しており、あのエンドポイントは
-    // もう通らない。通知はこのアプリの心臓部なのに、失敗は results に
-    // 記録されるだけで誰の目にも触れず、静かに死んでいた。
-    //
-    // 移行先は Messaging API。LINE Developers でチャネルを作り、
-    //   LINE_CHANNEL_ACCESS_TOKEN … チャネルアクセストークン（長期）
-    //   LINE_USER_ID              … 送信先のユーザーID（自分のID）
-    // を設定する。どちらか欠けていれば skip。
     const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const lineUserId = process.env.LINE_USER_ID;
     const lineWanted = settings.channel === 'line' || settings.channel === 'both';
@@ -99,25 +89,27 @@ async function handleNotification(req: NextRequest) {
       results.line = 'skipped (通知設定でLINEが無効になっています)';
     } else if (lineToken && lineUserId) {
       try {
+        console.log(`Sending LINE notification to user ${lineUserId.slice(0, 6)}...`);
         const lineRes = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${lineToken}`,
+            Authorization: `Bearer ${lineToken.trim()}`,
           },
           body: JSON.stringify({
-            to: lineUserId,
+            to: lineUserId.trim(),
             messages: [{ type: 'text', text: messageText }],
           }),
         });
 
         if (lineRes.ok) {
+          console.log('LINE notification sent successfully');
           results.line = 'sent';
         } else {
           // 原因（トークン失効・ID間違い・無料枠切れ）が本文に入るのでログに残す
           const detail = await lineRes.text().catch(() => '');
           console.error('LINE push failed:', lineRes.status, detail);
-          results.line = `failed (${lineRes.status})`;
+          results.line = `failed (${lineRes.status}: ${detail || 'Unauthorized'})`;
         }
       } catch (err: any) {
         console.error('LINE push error:', err);
