@@ -39,6 +39,10 @@ create table if not exists public.user_settings (
   -- これが無いと「terms が0件＝初回」と誤判定し、単語帳を空にするたびに
   -- サンプルが復活してしまう（migrations/002 参照）。
   seeded_at timestamp with time zone,
+  -- 称号ランク（「忘れん坊」「ひよっこ」等）の元になる累計復習回数。
+  -- 端末のlocalStorageではなくここに置くことで、PC/スマホ間でランクが揃う。
+  total_reviews integer not null default 0,
+  total_correct integer not null default 0,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

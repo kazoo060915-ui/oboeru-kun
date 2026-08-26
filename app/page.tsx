@@ -18,7 +18,7 @@ import { todayStr } from '@/lib/date';
 import { INTERVALS, SCORE_KEEP } from '@/lib/constants';
 import { triggerScoreEffects, triggerSessionCompleteEffects, triggerRankUpEffects } from '@/lib/effects';
 import {
-  getLearnerStats,
+  fetchLearnerStats,
   getRankByReviews,
   recordReviewStats,
   isBossTerm,
@@ -134,7 +134,7 @@ export default function Home() {
       setUserName(savedName);
       setNameInput(savedName);
     }
-    setLearnerStats(getLearnerStats());
+    fetchLearnerStats().then(setLearnerStats);
   }, []);
 
   const handleSaveName = (e: React.FormEvent) => {
@@ -377,11 +377,12 @@ export default function Home() {
     ]);
 
     // 称号Statsの記録とランクアップ判定
-    const { newStats, promotedRank: rankUp } = recordReviewStats(1, data.isCorrect ? 1 : 0);
-    setLearnerStats(newStats);
-    if (rankUp) {
-      setPromotedRank(rankUp);
-    }
+    recordReviewStats(learnerStats, 1, data.isCorrect ? 1 : 0).then(({ newStats, promotedRank: rankUp }) => {
+      setLearnerStats(newStats);
+      if (rankUp) {
+        setPromotedRank(rankUp);
+      }
+    });
 
     if (terms) {
       const updatedTerms = terms.map((t) =>
@@ -507,7 +508,7 @@ export default function Home() {
 
       // 称号Statsの記録とランクアップ判定
       const isCorrect = data.result.score >= 80;
-      const { newStats, promotedRank: rankUp } = recordReviewStats(1, isCorrect ? 1 : 0);
+      const { newStats, promotedRank: rankUp } = await recordReviewStats(learnerStats, 1, isCorrect ? 1 : 0);
       setLearnerStats(newStats);
       if (rankUp) {
         setPromotedRank(rankUp);

@@ -55,33 +55,36 @@ export const LEARNER_RANKS: LearnerRank[] = [
   },
 ];
 
-const STATS_STORAGE_KEY = 'oboeru_learner_stats';
-
 export interface LearnerStats {
   totalReviews: number; // 累計復習回数
   totalCorrect: number; // 累計正解数
   currentRank: number;  // 現在のランク
 }
 
-/** ローカルストレージからユーザーの学習実績を取得 */
-export function getLearnerStats(): LearnerStats {
-  if (typeof window === 'undefined') {
-    return { totalReviews: 0, totalCorrect: 0, currentRank: 1 };
-  }
+const EMPTY_STATS: LearnerStats = { totalReviews: 0, totalCorrect: 0, currentRank: 1 };
+
+/**
+ * サーバー（DB）からユーザーの学習実績を取得。
+ *
+ * 以前は localStorage にのみ保存していたため、PC とスマホなど端末が
+ * 違うと累計復習回数が別々にカウントされ、同じアカウントなのに表示
+ * されるランクが端末ごとにズレていた。DBに一本化することでどの端末
+ * からでも同じランクが見えるようにする。
+ */
+export async function fetchLearnerStats(): Promise<LearnerStats> {
   try {
-    const raw = localStorage.getItem(STATS_STORAGE_KEY);
-    if (!raw) return { totalReviews: 0, totalCorrect: 0, currentRank: 1 };
-    const parsed = JSON.parse(raw);
-    const totalReviews = Number(parsed.totalReviews) || 0;
-    const totalCorrect = Number(parsed.totalCorrect) || 0;
-    const rankInfo = getRankByReviews(totalReviews);
+    const res = await fetch('/api/learner-stats');
+    if (!res.ok) return EMPTY_STATS;
+    const data = await res.json();
+    const totalReviews = Number(data.totalReviews) || 0;
+    const totalCorrect = Number(data.totalCorrect) || 0;
     return {
       totalReviews,
       totalCorrect,
-      currentRank: rankInfo.rank,
+      currentRank: getRankByReviews(totalReviews).rank,
     };
   } catch {
-    return { totalReviews: 0, totalCorrect: 0, currentRank: 1 };
+    return EMPTY_STATS;
   }
 }
 
@@ -112,35 +115,40 @@ export function getNextRankInfo(reviews: number): { nextRank: LearnerRank | null
   return { nextRank, remaining, progressPercent };
 }
 
-/** 回答を記録し、ランクアップしたか判定して新しいStatsを保存・返却 */
-export function recordReviewStats(answeredCount: number, correctCount: number): {
+/**
+ * 回答をサーバー（DB）に記録し、ランクアップしたか判定して新しいStatsを返却。
+ * ランクアップ判定に必要な「更新前のランク」は呼び出し側が保持している
+ * 現在のstateを渡す（サーバーには前回値を問い合わせずに済む）。
+ */
+export async function recordReviewStats(
+  prevStats: LearnerStats,
+  answeredCount: number,
+  correctCount: number
+): Promise<{
   newStats: LearnerStats;
   promotedRank: LearnerRank | null;
-} {
-  const prevStats = getLearnerStats();
+}> {
   const prevRank = getRankByReviews(prevStats.totalReviews);
 
-  const updatedReviews = prevStats.totalReviews + answeredCount;
-  const updatedCorrect = prevStats.totalCorrect + correctCount;
-  const newRank = getRankByReviews(updatedReviews);
+  try {
+    const res = await fetch('/api/learner-stats', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answeredCount, correctCount }),
+    });
+    if (!res.ok) throw new Error('failed to update learner stats');
+    const data = await res.json();
+    const totalReviews = Number(data.totalReviews) || 0;
+    const totalCorrect = Number(data.totalCorrect) || 0;
+    const newRank = getRankByReviews(totalReviews);
 
-  const newStats: LearnerStats = {
-    totalReviews: updatedReviews,
-    totalCorrect: updatedCorrect,
-    currentRank: newRank.rank,
-  };
-
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(newStats));
-    } catch (e) {
-      console.error('Failed to save learner stats:', e);
-    }
+    const newStats: LearnerStats = { totalReviews, totalCorrect, currentRank: newRank.rank };
+    const promotedRank = newRank.rank > prevRank.rank ? newRank : null;
+    return { newStats, promotedRank };
+  } catch (e) {
+    console.error('Failed to save learner stats:', e);
+    return { newStats: prevStats, promotedRank: null };
   }
-
-  const promotedRank = newRank.rank > prevRank.rank ? newRank : null;
-
-  return { newStats, promotedRank };
 }
 
 /** 知識定着率（0〜100%）および各レベル件数を計算 */
