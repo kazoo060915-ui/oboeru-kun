@@ -1089,65 +1089,88 @@ export default function Home() {
                 </div>
               </div>
             ) : due.length > 0 ? (
-              // 今日の復習カード（最重要メインカード）
-              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className="text-xs font-bold text-[#1A1714]/70">今日復習する用語</p>
-                    <p className="font-serif text-4xl sm:text-5xl font-bold leading-none text-[#1A1714] mt-1">
-                      {due.length}
-                      <span className="ml-1.5 font-sans text-sm font-normal text-[#1A1714]/80">件</span>
-                    </p>
-                  </div>
-                  <span className="font-mono text-[11px] text-[#B83227] font-bold bg-[#B83227]/10 px-2 py-1 border border-[#B83227]/30">
-                    全 {due.length} 件が待機中
-                  </span>
-                </div>
+              // 今日の復習カード（デイリー目標：あと3問主役デザイン）
+              (() => {
+                const effectiveLimit = sessionLimit > 0 ? sessionLimit : due.length;
+                const timeLabel = sessionLimit === 3 ? '1分' : sessionLimit === 5 ? '3分' : sessionLimit === 10 ? '5分' : 'じっくり';
+                return (
+                  <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
+                    {/* ヘッダー＆待機ストック */}
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1 border border-[#B83227] bg-[#B83227]/10 px-2 py-0.5 font-mono text-[10px] sm:text-xs font-bold text-[#B83227]">
+                        🎯 今日のデイリー目標
+                      </span>
+                      <span className="font-mono text-[10px] sm:text-[11px] text-[#1A1714]/60">
+                        待機ストック: 全{due.length}件
+                      </span>
+                    </div>
 
-                {/* 問題数コース選択 */}
-                <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
-                  <p className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/70 mb-1">今日のペースを選ぶ</p>
-                  <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
-                    {[
-                      { count: 3, label: '3問', time: '1分' },
-                      { count: 5, label: '5問', time: '3分' },
-                      { count: 10, label: '10問', time: '5分' },
-                      { count: 0, label: '全問', time: '無制限' },
-                    ].map((c) => (
+                    {/* メインの目標問題数 */}
+                    <div className="mt-2.5">
+                      <p className="font-serif text-3xl sm:text-4xl font-bold leading-none text-[#1A1714]">
+                        あと <span className="text-[#B83227] text-4xl sm:text-5xl">{effectiveLimit}</span> 問
+                        <span className="ml-2 font-sans text-xs sm:text-sm font-normal text-[#1A1714]/70">
+                          （目安: 約{timeLabel}）
+                        </span>
+                      </p>
+                    </div>
+
+                    {/* コーチの安心メッセージ */}
+                    <div className="mt-2.5 rounded border border-[#1A1714]/15 bg-white/70 px-3 py-2">
+                      <p className="text-xs font-bold leading-relaxed text-[#1A1714]/85">
+                        💬 「ストックは全{due.length}件あるけど、一気にやらんでええ！まずは今日の{effectiveLimit}問（{timeLabel}）サクッと解いたら合格や！」
+                      </p>
+                    </div>
+
+                    {/* 問題数ペース選択 */}
+                    <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/70">今日のペースを選ぶ</p>
+                        <span className="font-mono text-[9px] text-[#1A1714]/50">タップで目標変更</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
+                        {[
+                          { count: 3, label: '3問', time: '1分' },
+                          { count: 5, label: '5問', time: '3分' },
+                          { count: 10, label: '10問', time: '5分' },
+                          { count: 0, label: '全問', time: '無制限' },
+                        ].map((c) => (
+                          <button
+                            key={c.count}
+                            onClick={() => setSessionLimit(c.count)}
+                            className={`border-2 p-1 text-center transition-all ${
+                              sessionLimit === c.count
+                                ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#1A1714]'
+                                : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
+                            }`}
+                          >
+                            <p className="font-bold text-xs">{c.label}</p>
+                            <p className="text-[9px] opacity-70">{c.time}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 出題開始ボタン */}
+                    <div className="mt-3.5 space-y-2">
                       <button
-                        key={c.count}
-                        onClick={() => setSessionLimit(c.count)}
-                        className={`border-2 p-1 text-center transition-all ${
-                          sessionLimit === c.count
-                            ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#1A1714]'
-                            : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
-                        }`}
+                        onClick={() => startQuiz({ reset: true, mode: 'standard' })}
+                        className="w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#9c2a20] flex items-center justify-center gap-2 text-sm sm:text-base"
                       >
-                        <p className="font-bold text-xs">{c.label}</p>
-                        <p className="text-[9px] opacity-70">{c.time}</p>
+                        <span>✍️</span>
+                        <span>{sessionLimit > 0 ? `今日の目標（${sessionLimit}問）をサクッと解く` : '全問じっくりチャレンジする'}</span>
                       </button>
-                    ))}
+                      <button
+                        onClick={() => startQuiz({ reset: true, mode: 'quick' })}
+                        className="w-full border-2 border-[#1A1714] bg-[#D9A441] px-4 py-2 font-bold text-[#1A1714] shadow-[2px_2px_0_0_#1A1714] transition hover:bg-[#c99534] flex items-center justify-center gap-1.5 text-xs sm:text-sm"
+                      >
+                        <span>⚡️</span>
+                        <span>特急・4択モードで解く（スキマ時間・電車用）</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-
-                {/* 出題開始ボタン */}
-                <div className="mt-3.5 space-y-2">
-                  <button
-                    onClick={() => startQuiz({ reset: true, mode: 'standard' })}
-                    className="w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#9c2a20] flex items-center justify-center gap-2 text-sm sm:text-base"
-                  >
-                    <span>✍️</span>
-                    <span>{sessionLimit > 0 ? `自分の言葉で ${sessionLimit} 問復習する` : '全問じっくりチャレンジする'}</span>
-                  </button>
-                  <button
-                    onClick={() => startQuiz({ reset: true, mode: 'quick' })}
-                    className="w-full border-2 border-[#1A1714] bg-[#D9A441] px-4 py-2 font-bold text-[#1A1714] shadow-[2px_2px_0_0_#1A1714] transition hover:bg-[#c99534] flex items-center justify-center gap-1.5 text-xs sm:text-sm"
-                  >
-                    <span>⚡️</span>
-                    <span>特急・4択モードで復習する（スキマ時間・電車用）</span>
-                  </button>
-                </div>
-              </div>
+                );
+              })()
             ) : (
               // 本日のノルマ完了カード
               <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
