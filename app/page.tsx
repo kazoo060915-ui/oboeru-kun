@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import Stamp from '@/components/Stamp';
-import MicButton from '@/components/MicButton';
 import AuthModal from '@/components/AuthModal';
 import NotificationModal from '@/components/NotificationModal';
 import FileImporter from '@/components/FileImporter';
@@ -1481,27 +1480,16 @@ export default function Home() {
               </div>
             )}
 
-            <label className="mt-6 block text-sm font-bold text-[#1A1714]">
+            <label className="mt-5 block text-sm font-bold text-[#1A1714]">
               自分の言葉で説明してみて
             </label>
             <textarea
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
               rows={5}
-              placeholder="人に教えるつもりで書くと定着する"
+              placeholder="人に教えるつもりで書くと定着する（音声入力もおすすめ）"
               className="mt-2 w-full resize-none border-2 border-[#1A1714] bg-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#B83227]"
             />
-
-            <div className="mt-3 flex items-center gap-3">
-              <MicButton
-                onText={(t) => setAnswer((a) => (a ? a.trim() + ' ' : '') + t)}
-                onError={setError}
-                label="声で説明する"
-              />
-              <p className="text-xs text-[#1A1714]/60">
-                口に出す方が、ごまかしが効かへん
-              </p>
-            </div>
           </div>
         </div>
         )}
@@ -1722,11 +1710,6 @@ export default function Home() {
               )}
 
               <div className="flex gap-2 p-4">
-                <MicButton
-                  onText={(t) => setChatInput((c) => (c ? c.trim() + ' ' : '') + t)}
-                  onError={setError}
-                  label=""
-                />
                 <input
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
