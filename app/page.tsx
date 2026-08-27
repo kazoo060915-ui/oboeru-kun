@@ -1977,11 +1977,20 @@ interface InteractiveExplanationProps {
   onAddTerm?: (word: string) => void;
 }
 
-// Markdown テーブルおよび通常段落をパースしてレンダリングするコンポーネント（スマホ横スクロール対応）
+// Markdown テーブルおよび通常段落をパースしてレンダリングするコンポーネント（スマホ横スクロール・自動段落分け対応）
 function FormattedExplanationText({ text }: { text: string }) {
   const parts = React.useMemo(() => {
-    const lines = text.split('\n');
-    const elements: Array<{ type: 'text'; content: string } | { type: 'table'; headers: string[]; rows: string[][] }> = [];
+    if (!text) return [];
+
+    // もし【見出し】が改行なしで詰まっている場合、自動で【の前と後に改行を補正
+    const normalizedText = text
+      // 文中の「【」の前に空行を入れる（文頭以外）
+      .replace(/([^\n])\s*【/g, '$1\n\n【')
+      // 見出し直後の改行を整える
+      .replace(/【([^】]+)】\s*/g, '【$1】\n');
+
+    const lines = normalizedText.split('\n');
+    const elements: Array<{ type: 'text'; content: string; isSectionHeader?: boolean } | { type: 'table'; headers: string[]; rows: string[][] }> = [];
     let currentTextLines: string[] = [];
     let tableLines: string[] = [];
     let inTable = false;
@@ -2040,13 +2049,27 @@ function FormattedExplanationText({ text }: { text: string }) {
   }, [text]);
 
   return (
-    <div className="space-y-3 mt-2">
+    <div className="space-y-3.5 mt-2">
       {parts.map((part, idx) => {
         if (part.type === 'text') {
+          // 段落ごとに分割して適切な余白を設ける
+          const paragraphs = part.content.split(/\n{2,}/).filter((p) => p.trim());
           return (
-            <p key={idx} className="whitespace-pre-line text-sm leading-relaxed text-[#1A1714]">
-              {part.content}
-            </p>
+            <div key={idx} className="space-y-3">
+              {paragraphs.map((para, pIdx) => {
+                const isHeading = para.trim().startsWith('【') && para.trim().includes('】');
+                return (
+                  <p
+                    key={pIdx}
+                    className={`whitespace-pre-line text-sm leading-relaxed text-[#1A1714] ${
+                      isHeading ? 'font-medium' : ''
+                    }`}
+                  >
+                    {para}
+                  </p>
+                );
+              })}
+            </div>
           );
         }
         return (
