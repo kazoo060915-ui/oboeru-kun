@@ -72,11 +72,11 @@ async function handleNotification(req: NextRequest) {
         : 'https://oboeru-kun.vercel.app');
 
     if (count === 0) {
-      messageText = `【覚える君】今日の復習用語はあらへんよ！全勝中や、素晴らしい！\n\n▼ アプリを開く\n${appUrl}`;
+      messageText = `【覚える君】今日の復習用語はあらへんよ！全勝中や、素晴らしい！🎉\n\n▼ アプリを開く\n${appUrl}`;
     } else {
-      const samples = dueTerms.slice(0, 2).map((t) => `「${t.term}」`).join('と');
-      const extra = count > 2 ? ` ほか計${count}件` : '';
-      messageText = `【覚える君】おつかれさま！今日は${count}件の復習があるで。${samples}${extra}、覚えてる？隙間時間にパパッと答えてみよう！\n\n▼ 今すぐ復習する\n${appUrl}`;
+      const samples = dueTerms.slice(0, 2).map((t) => `「${t.term}」`).join('や');
+      const targetCount = Math.min(count, 3);
+      messageText = `【覚える君】おはよう！朝の1分（${targetCount}問）だけサクッと復習しよか！\n例えば${samples}…覚えてる？\nストックは計${count}件あるけど、まずは${targetCount}問解いたら今日のノルマは100点満点や！\n\n▼ 1分でサクッと解く\n${appUrl}`;
     }
 
     const results: Record<string, string> = {};
@@ -140,7 +140,7 @@ async function handleNotification(req: NextRequest) {
           body: JSON.stringify({
             from: process.env.NOTIFICATION_FROM_EMAIL || 'onboarding@resend.dev',
             to: [toEmail],
-            subject: `【覚える君】今日の復習(${count}件)`,
+            subject: count === 0 ? '【覚える君】今日の復習は全勝中！🎉' : `【覚える君】今日の目標：まずは1分（3問）サクッと復習しよか！`,
             text: messageText,
           }),
         });
