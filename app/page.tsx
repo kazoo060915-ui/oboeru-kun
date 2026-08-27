@@ -1106,13 +1106,19 @@ export default function Home() {
                     </div>
 
                     {/* メインの目標問題数 */}
-                    <div className="mt-2.5">
-                      <p className="font-serif text-3xl sm:text-4xl font-bold leading-none text-[#1A1714]">
-                        あと <span className="text-[#B83227] text-4xl sm:text-5xl">{effectiveLimit}</span> 問
-                        <span className="ml-2 font-sans text-xs sm:text-sm font-normal text-[#1A1714]/70">
-                          （目安: 約{timeLabel}）
-                        </span>
-                      </p>
+                    <div className="mt-2.5 flex items-baseline flex-wrap gap-x-1.5 gap-y-1">
+                      <span className="font-serif text-2xl sm:text-3xl font-bold text-[#1A1714]">
+                        あと
+                      </span>
+                      <span className="font-mono text-5xl sm:text-6xl font-black leading-none text-[#B83227] tracking-tight">
+                        {effectiveLimit}
+                      </span>
+                      <span className="font-serif text-2xl sm:text-3xl font-bold text-[#1A1714]">
+                        問
+                      </span>
+                      <span className="ml-1.5 font-sans text-xs sm:text-sm font-normal text-[#1A1714]/70">
+                        （目安: 約{timeLabel}）
+                      </span>
                     </div>
 
                     {/* コーチの安心メッセージ */}
