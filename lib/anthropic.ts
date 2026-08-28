@@ -132,6 +132,8 @@ function safeParseJson<T>(rawText: string): T | null {
 export interface GradeResult {
   score: number;
   tsukkomi: string;
+  /** 合格ライン（80点以上）となる1行模範解答フレーズ */
+  model_answer?: string;
   correct: string;
   missed: string[];
   mission: string;
@@ -234,6 +236,7 @@ ${userName}が自分の言葉で説明した内容: ${body}
 {
   "score": 0〜100の整数,
   "tsukkomi": "あなたのキャラクターらしい愛のある一言コメント（1〜2文）。${userName}の回答内容を具体的に拾い（『${userName}、○○って言えたのは素晴らしい！けど△△が惜しかったな！』等）、上記のスコア帯に応じた温度感で突っ込む",
+  "model_answer": "この用語の合格ライン（80点以上）となる、超わかりやすい1〜2文の模範解答フレーズ。『〜〜』という形式で、次回${userName}がそのまま答えられるように核となる要約を簡潔に記述（30〜60文字程度。例: 『人間が手入力するんじゃなく、機械が勝手に次々とサーバーを訪ねて調べること』）",
   "correct": "【技術的正体・分類】＋【語源・正式名称】＋【日常の例え・なぜ使うか】＋【実際の有名サイトでの使われ方（AmazonやX等）】＋【一生忘れない覚え方（上記のタイプ判定と自己チェックを必ず通したもの）】＋【末尾の質問誘導セリフ】の構成。⚠️ 重要：読みやすさのため、各項目（【技術的正体・分類】など）の間には必ず【2回改行（\\n\\n）】を入れて段落を明確に分けること！1つの長い塊に詰め込まないこと。初学者でも一発で腑に落ちるようにあなたのキャラクターの口調で丁寧に解説（5〜8文程度）。最後は必ず『これで分かったか、${userName}？〇〇について分からんかったら下のチャットでなんでも聞いてや！』と${userName}に質問を促す言葉で締めくくる。",
   "missed": ["生徒の説明に足りなかった重要キーワードを最大3つ。生徒が既に言えていた言葉は絶対に含めない。生徒が(わからん)の場合は用語の核となるキーワードを入れる"],
   "mission": "今すぐ10秒〜1分でその場で体感・実行できる超具体的なミニ課題を1つ。生徒は【スマホ（LINE経由）で復習している可能性が高い】ため、ターミナルやPCのコマンド（curl等）を必須にするのは絶対に禁止！『スマホのブラウザで実際に○○のページを開いて挙動やURLを確かめる』『身近な有名サイト（AmazonやYouTube等）を開いて○○の箇所をタップしてみる』『解説に出てきた覚え方のフレーズを声に出して1回呟いてみる』『下のチャットでコーチに「○○についてもっと教えて」と質問してみる』など、スマホでも手元で今すぐ100%できる超実践アクションを指定すること（PC向けに「※PCならターミナルで○○も試せるで」と一言添えるのはOK）。抽象的な「調べてみよう」は禁止"
@@ -342,8 +345,11 @@ function extractPartialGradeFields(acc: string): Partial<GradeResult> {
   const readStringField = (key: string, nextKeyPattern: string): string | undefined =>
     decodeClosedField(key, nextKeyPattern) ?? extractInProgressText(acc, key);
 
-  const tsukkomi = readStringField('tsukkomi', '"correct"');
+  const tsukkomi = readStringField('tsukkomi', '"model_answer"|"correct"');
   if (tsukkomi !== undefined) partial.tsukkomi = tsukkomi;
+
+  const model_answer = readStringField('model_answer', '"correct"');
+  if (model_answer !== undefined) partial.model_answer = model_answer;
 
   const correct = readStringField('correct', '"missed"');
   if (correct !== undefined) partial.correct = correct;
@@ -574,6 +580,7 @@ function buildFallbackGradeResult(term: string, body: string, coach: CoachType =
       tsukkomi: coach === 'osaka'
         ? `${userName}、「わからん」って正直に言えたの、それだけで百点満点のスタートや！忘れたもんはしゃーない、今すぐ頭に焼き付けよ！`
         : `${userName}さん、正直に「わからない」と言えたのが一番の成長のチャンスです！一緒にマスターしましょう。`,
+      model_answer: `『${term}』はシステムを安全かつスムーズに動かすための重要な仕組みのこと`,
       correct: correctText,
       missed: [term, '仕組み'],
       mission: `スマホのブラウザで解説の中に出てきた覚え方のフレーズを声に出して1回呟いてみるか、下のチャットで「${term}」の別の例えを聞いてみよう！`,
@@ -590,6 +597,7 @@ function buildFallbackGradeResult(term: string, body: string, coach: CoachType =
     tsukkomi: coach === 'osaka'
       ? `おっ、${userName}！ええ線いっとるやん！コアな部分は捉えとるから、あとは「なぜそれを使うんか」まで言えたら完璧やったな！`
       : `${userName}さん、良い着眼点です！基本概念は掴めているので、さらに「メリットや背景」まで言語化できると完璧です。`,
+    model_answer: `『${term}』はWeb開発を効率化・安定化させるための必須の仕組みのこと`,
     correct: correctText,
     missed: [term, '本質', 'メリット'],
     mission: `解説の中に出てきた覚え方のポイントを声に出して1回言ってみるか、下のチャットでコーチに「実務ではどう使う？」と聞いてみよう！`,

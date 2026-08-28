@@ -39,6 +39,7 @@ export default function Home() {
   const [result, setResult] = useState<{
     score: number;
     tsukkomi?: string;
+    model_answer?: string;
     correct?: string;
     missed?: string[];
     mission?: string;
@@ -1720,6 +1721,7 @@ export default function Home() {
               {result.correct ? (
                 <InteractiveExplanation
                   text={result.correct}
+                  modelAnswer={result.model_answer}
                   missedWords={result.missed || []}
                   relatedWords={result.related}
                   onWordClick={(word) => askChat(`「${word}」ってどういう意味？`)}
@@ -2083,6 +2085,7 @@ export default function Home() {
 
 interface InteractiveExplanationProps {
   text: string;
+  modelAnswer?: string;
   missedWords?: string[];
   /** AIが解説中から選んだ関連専門用語。ハードコードの辞書より確実 */
   relatedWords?: string[];
@@ -2090,7 +2093,26 @@ interface InteractiveExplanationProps {
   onAddTerm?: (word: string) => void;
 }
 
-// Markdown テーブルおよび通常段落をパースしてレンダリングするコンポーネント（スマホ横スクロール・自動段落分け対応）
+// テキスト内の 『...』 を赤太字ハイライトするレンダラー
+function renderHighlightedText(content: string) {
+  // 『...』 を抽出して赤文字ハイライト
+  const segments = content.split(/(『[^』]+』)/g);
+  return segments.map((seg, i) => {
+    if (seg.startsWith('『') && seg.endsWith('』')) {
+      return (
+        <span
+          key={i}
+          className="font-bold text-[#B83227] bg-[#B83227]/10 px-1.5 py-0.5 rounded border border-[#B83227]/25 mx-0.5 inline-block my-0.5"
+        >
+          {seg}
+        </span>
+      );
+    }
+    return seg;
+  });
+}
+
+// Markdown テーブルおよび通常段落をパースしてレンダリングするコンポーネント（スマホ横スクロール・自動段落分け・赤文字ハイライト対応）
 function FormattedExplanationText({ text }: { text: string }) {
   const parts = React.useMemo(() => {
     if (!text) return [];
@@ -2178,7 +2200,7 @@ function FormattedExplanationText({ text }: { text: string }) {
                       isHeading ? 'font-medium' : ''
                     }`}
                   >
-                    {para}
+                    {renderHighlightedText(para)}
                   </p>
                 );
               })}
@@ -2202,7 +2224,7 @@ function FormattedExplanationText({ text }: { text: string }) {
                   <tr key={ri} className={ri % 2 === 1 ? 'bg-[#F7F1E3]/50' : 'bg-white'}>
                     {row.map((cell, ci) => (
                       <td key={ci} className="px-3 py-2 text-[#1A1714] font-medium leading-normal whitespace-nowrap sm:whitespace-normal">
-                        {cell}
+                        {renderHighlightedText(cell)}
                       </td>
                     ))}
                   </tr>
@@ -2218,11 +2240,20 @@ function FormattedExplanationText({ text }: { text: string }) {
 
 function InteractiveExplanation({
   text,
+  modelAnswer,
   missedWords = [],
   relatedWords = [],
   onWordClick,
   onAddTerm,
 }: InteractiveExplanationProps) {
+  // 合格ラインとなる模範フレーズ（modelAnswer または 本文中の最初の『...』）
+  const displayModelAnswer = React.useMemo(() => {
+    if (modelAnswer?.trim()) return modelAnswer.trim();
+    const match = text.match(/『([^』]+)』/);
+    if (match) return match[1];
+    return null;
+  }, [modelAnswer, text]);
+
   // 解説文から「真のIT専門用語・プロトコル名」だけを厳選抽出（日常語や例え話は除外）
   const detectedKeywords = React.useMemo(() => {
     const list: string[] = [];
@@ -2271,6 +2302,22 @@ function InteractiveExplanation({
 
   return (
     <div>
+      {/* 🎯 合格ライン・模範フレーズカード */}
+      {displayModelAnswer && (
+        <div className="mb-4 border-2 border-[#B83227] bg-[#B83227]/5 p-3.5 shadow-[2px_2px_0_0_#B83227]">
+          <div className="flex items-center gap-1.5 font-bold text-xs text-[#B83227]">
+            <span className="text-base">🎯</span>
+            <span>これで合格！模範フレーズ（80点ライン）</span>
+          </div>
+          <p className="mt-1.5 font-serif text-sm sm:text-base font-bold text-[#B83227] leading-relaxed">
+            {displayModelAnswer.startsWith('『') ? displayModelAnswer : `『${displayModelAnswer}』`}
+          </p>
+          <p className="mt-1 text-[10px] sm:text-[11px] text-[#1A1714]/70 font-medium">
+            💡 次回復習する時は、この言葉（または近いニュアンス）を言えたら一発合格や！
+          </p>
+        </div>
+      )}
+
       {/* 本文（Markdownテーブルもスマホ対応で美しく描画） */}
       <FormattedExplanationText text={text} />
 
