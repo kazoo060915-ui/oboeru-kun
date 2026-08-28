@@ -101,6 +101,9 @@ export default function Home() {
   const [showNameModal, setShowNameModal] = useState(false);
   const [nameInput, setNameInput] = useState('カズ');
 
+  // 今日の復習完了数（デイリー目標カウントダウン用）
+  const [todayReviewedCount, setTodayReviewedCount] = useState<number>(0);
+
   // コーチキャラクター選択（localStorageで永続）
   const [coach, setCoach] = useState<CoachType>('osaka');
   const [showCoachMenu, setShowCoachMenu] = useState(false);
@@ -126,7 +129,7 @@ export default function Home() {
     }
   };
 
-  // ユーザー名＆学習実績（称号）の初期読み込み
+  // ユーザー名＆学習実績（称号）＆今日の復習完了数の初期読み込み
   useEffect(() => {
     const savedName = localStorage.getItem('oboeru_user_name');
     if (savedName) {
@@ -134,6 +137,13 @@ export default function Home() {
       setNameInput(savedName);
     }
     fetchLearnerStats().then(setLearnerStats);
+
+    // 今日の復習完了数の読み込み
+    const todayKey = 'oboeru_daily_' + todayStr();
+    const savedCount = localStorage.getItem(todayKey);
+    if (savedCount) {
+      setTodayReviewedCount(Number(savedCount) || 0);
+    }
   }, []);
 
   const handleSaveName = (e: React.FormEvent) => {
@@ -375,6 +385,13 @@ export default function Home() {
       },
     ]);
 
+    // 今日の復習完了数の加算
+    setTodayReviewedCount((prev) => {
+      const next = prev + 1;
+      localStorage.setItem('oboeru_daily_' + todayStr(), String(next));
+      return next;
+    });
+
     // 称号Statsの記録とランクアップ判定
     recordReviewStats(learnerStats, 1, data.isCorrect ? 1 : 0).then(({ newStats, promotedRank: rankUp }) => {
       setLearnerStats(newStats);
@@ -504,6 +521,13 @@ export default function Home() {
           isBoss: bossInfo.isBoss,
         },
       ]);
+
+      // 今日の復習完了数の加算
+      setTodayReviewedCount((prev) => {
+        const next = prev + 1;
+        localStorage.setItem('oboeru_daily_' + todayStr(), String(next));
+        return next;
+      });
 
       // 称号Statsの記録とランクアップ判定
       const isCorrect = data.result.score >= 80;
@@ -1088,143 +1112,203 @@ export default function Home() {
                   </button>
                 </div>
               </div>
-            ) : due.length > 0 ? (
-              // 今日の復習カード（デイリー目標：あと3問主役デザイン）
+            ) : (
+              // 復習カード判定：今日の目標達成済みか、未達成かで切り替え
               (() => {
-                const effectiveLimit = sessionLimit > 0 ? sessionLimit : due.length;
-                const timeLabel = sessionLimit === 3 ? '1分' : sessionLimit === 5 ? '3分' : sessionLimit === 10 ? '5分' : 'じっくり';
+                const dailyGoal = sessionLimit > 0 ? sessionLimit : 3;
+                const remainingToday = Math.max(0, dailyGoal - todayReviewedCount);
+                const isDailyGoalMet = (todayReviewedCount >= dailyGoal && todayReviewedCount > 0) || due.length === 0;
+                const timeLabel = remainingToday === 1 ? '30秒' : remainingToday === 2 ? '1分' : remainingToday === 3 ? '1分' : remainingToday === 5 ? '3分' : remainingToday === 10 ? '5分' : 'じっくり';
+
+                if (isDailyGoalMet && due.length > 0) {
+                  // ① 今日のデイリー目標（例: 3問）を達成した状態（ストックはまだ残っているが今日のノルマは合格！）
+                  return (
+                    <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1 border border-[#2e7d32] bg-[#2e7d32]/10 px-2 py-0.5 font-mono text-[10px] sm:text-xs font-bold text-[#2e7d32]">
+                          🎉 本日のデイリー目標達成！
+                        </span>
+                        <span className="font-mono text-[10px] sm:text-[11px] text-[#1A1714]/60">
+                          本日 {todayReviewedCount} 問クリア（待機残: {due.length}件）
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-3">
+                        <span className="text-4xl sm:text-5xl">💮</span>
+                        <div>
+                          <h3 className="font-serif text-lg sm:text-xl font-bold text-[#1A1714]">
+                            今日のノルマは合格や！
+                          </h3>
+                          <p className="text-xs font-bold text-[#2e7d32]">
+                            DAILY GOAL COMPLETED ({todayReviewedCount} / {dailyGoal} 問)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 rounded border border-[#1A1714]/15 bg-white/70 px-3 py-2">
+                        <p className="text-xs font-bold leading-relaxed text-[#1A1714]/85">
+                          💬 「{userName}、今日のノルマ（{todayReviewedCount}問）バッチリ達成や！素晴らしい継続力！今日はこれで終えてもええし、余裕があったらおかわりしてもええで！」
+                        </p>
+                      </div>
+
+                      {/* おかわり復習ボタン */}
+                      <div className="mt-3.5 space-y-2">
+                        <button
+                          onClick={() => startQuiz({ reset: true, mode: 'standard' })}
+                          className="w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#9c2a20] flex items-center justify-center gap-2 text-sm sm:text-base"
+                        >
+                          <span>✍️</span>
+                          <span>さらにおかわり復習する（次の{sessionLimit > 0 ? `${sessionLimit}問` : '全問'}）</span>
+                        </button>
+                        <button
+                          onClick={() => startQuiz({ reset: true, mode: 'quick' })}
+                          className="w-full border-2 border-[#1A1714] bg-[#D9A441] px-4 py-2 font-bold text-[#1A1714] shadow-[2px_2px_0_0_#1A1714] transition hover:bg-[#c99534] flex items-center justify-center gap-1.5 text-xs sm:text-sm"
+                        >
+                          <span>⚡️</span>
+                          <span>特急・4択でおかわり（スキマ時間・電車用）</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (due.length > 0) {
+                  // ② 今日のデイリー目標がまだ残っている状態（カウントダウン表示）
+                  return (
+                    <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
+                      {/* ヘッダー＆進捗 */}
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1 border border-[#B83227] bg-[#B83227]/10 px-2 py-0.5 font-mono text-[10px] sm:text-xs font-bold text-[#B83227]">
+                          🎯 今日のデイリー目標
+                        </span>
+                        <span className="font-mono text-[10px] sm:text-[11px] text-[#1A1714]/60">
+                          今日 {todayReviewedCount}/{dailyGoal} 問完了（待機: 全{due.length}件）
+                        </span>
+                      </div>
+
+                      {/* メインの目標残り問題数 */}
+                      <div className="mt-2.5 flex items-baseline flex-wrap gap-x-1.5 gap-y-1">
+                        <span className="font-serif text-2xl sm:text-3xl font-bold text-[#1A1714]">
+                          あと
+                        </span>
+                        <span className="font-mono text-5xl sm:text-6xl font-black leading-none text-[#B83227] tracking-tight">
+                          {remainingToday}
+                        </span>
+                        <span className="font-serif text-2xl sm:text-3xl font-bold text-[#1A1714]">
+                          問
+                        </span>
+                        <span className="ml-1.5 font-sans text-xs sm:text-sm font-normal text-[#1A1714]/70">
+                          （目安: 約{timeLabel}）
+                        </span>
+                      </div>
+
+                      {/* コーチの安心メッセージ */}
+                      <div className="mt-2.5 rounded border border-[#1A1714]/15 bg-white/70 px-3 py-2">
+                        <p className="text-xs font-bold leading-relaxed text-[#1A1714]/85">
+                          💬 「ストックは全{due.length}件あるけど、一気にやらんでええ！まずは今日のあと{remainingToday}問（{timeLabel}）サクッと解いたら合格や！」
+                        </p>
+                      </div>
+
+                      {/* 問題数ペース選択 */}
+                      <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/70">今日のペースを選ぶ</p>
+                          <span className="font-mono text-[9px] text-[#1A1714]/50">タップで目標変更</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
+                          {[
+                            { count: 3, label: '3問', time: '1分' },
+                            { count: 5, label: '5問', time: '3分' },
+                            { count: 10, label: '10問', time: '5分' },
+                            { count: 0, label: '全問', time: '無制限' },
+                          ].map((c) => (
+                            <button
+                              key={c.count}
+                              onClick={() => setSessionLimit(c.count)}
+                              className={`border-2 p-1 text-center transition-all ${
+                                sessionLimit === c.count
+                                  ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#1A1714]'
+                                  : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
+                              }`}
+                            >
+                              <p className="font-bold text-xs">{c.label}</p>
+                              <p className="text-[9px] opacity-70">{c.time}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 出題開始ボタン */}
+                      <div className="mt-3.5 space-y-2">
+                        <button
+                          onClick={() => startQuiz({ reset: true, mode: 'standard' })}
+                          className="w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#9c2a20] flex items-center justify-center gap-2 text-sm sm:text-base"
+                        >
+                          <span>✍️</span>
+                          <span>今日の目標（あと{remainingToday}問）をサクッと解く</span>
+                        </button>
+                        <button
+                          onClick={() => startQuiz({ reset: true, mode: 'quick' })}
+                          className="w-full border-2 border-[#1A1714] bg-[#D9A441] px-4 py-2 font-bold text-[#1A1714] shadow-[2px_2px_0_0_#1A1714] transition hover:bg-[#c99534] flex items-center justify-center gap-1.5 text-xs sm:text-sm"
+                        >
+                          <span>⚡️</span>
+                          <span>特急・4択モードで解く（スキマ時間・電車用）</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ③ 全用語クリア（待機ストックが0件）
                 return (
                   <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
-                    {/* ヘッダー＆待機ストック */}
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1 border border-[#B83227] bg-[#B83227]/10 px-2 py-0.5 font-mono text-[10px] sm:text-xs font-bold text-[#B83227]">
-                        🎯 今日のデイリー目標
-                      </span>
-                      <span className="font-mono text-[10px] sm:text-[11px] text-[#1A1714]/60">
-                        待機ストック: 全{due.length}件
-                      </span>
-                    </div>
-
-                    {/* メインの目標問題数 */}
-                    <div className="mt-2.5 flex items-baseline flex-wrap gap-x-1.5 gap-y-1">
-                      <span className="font-serif text-2xl sm:text-3xl font-bold text-[#1A1714]">
-                        あと
-                      </span>
-                      <span className="font-mono text-5xl sm:text-6xl font-black leading-none text-[#B83227] tracking-tight">
-                        {effectiveLimit}
-                      </span>
-                      <span className="font-serif text-2xl sm:text-3xl font-bold text-[#1A1714]">
-                        問
-                      </span>
-                      <span className="ml-1.5 font-sans text-xs sm:text-sm font-normal text-[#1A1714]/70">
-                        （目安: 約{timeLabel}）
-                      </span>
-                    </div>
-
-                    {/* コーチの安心メッセージ */}
-                    <div className="mt-2.5 rounded border border-[#1A1714]/15 bg-white/70 px-3 py-2">
-                      <p className="text-xs font-bold leading-relaxed text-[#1A1714]/85">
-                        💬 「ストックは全{due.length}件あるけど、一気にやらんでええ！まずは今日の{effectiveLimit}問（{timeLabel}）サクッと解いたら合格や！」
-                      </p>
-                    </div>
-
-                    {/* 問題数ペース選択 */}
-                    <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/70">今日のペースを選ぶ</p>
-                        <span className="font-mono text-[9px] text-[#1A1714]/50">タップで目標変更</span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl sm:text-3xl">🎉</span>
+                      <div>
+                        <h3 className="font-serif text-lg sm:text-xl font-bold text-[#1A1714]">本日の復習はすべて完了！</h3>
+                        <p className="text-[10px] font-mono font-bold text-[#8a6300]">ALL CLEAR TODAY</p>
                       </div>
-                      <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
-                        {[
-                          { count: 3, label: '3問', time: '1分' },
-                          { count: 5, label: '5問', time: '3分' },
-                          { count: 10, label: '10問', time: '5分' },
-                          { count: 0, label: '全問', time: '無制限' },
-                        ].map((c) => (
-                          <button
-                            key={c.count}
-                            onClick={() => setSessionLimit(c.count)}
-                            className={`border-2 p-1 text-center transition-all ${
-                              sessionLimit === c.count
-                                ? 'border-[#1A1714] bg-[#B83227] text-[#F7F1E3] font-bold shadow-[2px_2px_0_0_#1A1714]'
-                                : 'border-[#1A1714]/30 bg-white hover:border-[#1A1714]'
-                            }`}
-                          >
-                            <p className="font-bold text-xs">{c.label}</p>
-                            <p className="text-[9px] opacity-70">{c.time}</p>
-                          </button>
+                    </div>
+                    <p className="mt-2 text-xs sm:text-sm font-bold leading-relaxed text-[#1A1714]/80">
+                      「{getCompletionMessage(coach)}」
+                    </p>
+
+                    {/* レベル分布ミニバー */}
+                    <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
+                      <p className="text-[10px] font-bold text-[#1A1714]/60 mb-1.5">定着レベル分布（全 {terms.length} 件）</p>
+                      <div className="grid grid-cols-5 gap-1 text-center font-mono text-xs">
+                        {levelCounts.map((count, lvl) => (
+                          <div key={lvl} className="border border-[#1A1714]/30 bg-white/70 p-1">
+                            <p className="text-[9px] text-[#1A1714]/60">Lv.{lvl}</p>
+                            <p className="font-bold text-xs text-[#1A1714]">{count}<span className="text-[9px] font-normal">件</span></p>
+                          </div>
                         ))}
                       </div>
                     </div>
 
-                    {/* 出題開始ボタン */}
-                    <div className="mt-3.5 space-y-2">
+                    <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <button
-                        onClick={() => startQuiz({ reset: true, mode: 'standard' })}
-                        className="w-full border-2 border-[#1A1714] bg-[#B83227] px-4 py-3 font-bold text-[#F7F1E3] shadow-[3px_3px_0_0_#1A1714] transition hover:bg-[#9c2a20] flex items-center justify-center gap-2 text-sm sm:text-base"
+                        onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'standard' })}
+                        className="border-2 border-[#1A1714] bg-white px-3 py-2 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] transition-colors"
                       >
-                        <span>✍️</span>
-                        <span>{sessionLimit > 0 ? `今日の目標（${sessionLimit}問）をサクッと解く` : '全問じっくりチャレンジする'}</span>
+                        ✍️ 先取り復習 ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
                       </button>
                       <button
-                        onClick={() => startQuiz({ reset: true, mode: 'quick' })}
-                        className="w-full border-2 border-[#1A1714] bg-[#D9A441] px-4 py-2 font-bold text-[#1A1714] shadow-[2px_2px_0_0_#1A1714] transition hover:bg-[#c99534] flex items-center justify-center gap-1.5 text-xs sm:text-sm"
+                        onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'quick' })}
+                        className="border-2 border-[#1A1714] bg-[#D9A441]/20 px-3 py-2 text-xs font-bold text-[#8a6300] hover:bg-[#D9A441] hover:text-[#1A1714] transition-colors"
                       >
-                        <span>⚡️</span>
-                        <span>特急・4択モードで解く（スキマ時間・電車用）</span>
+                        ⚡ 4択で先取り
+                      </button>
+                      <button
+                        onClick={() => setView('add')}
+                        className="border-2 border-[#1A1714] bg-[#B83227] px-3 py-2 text-xs font-bold text-[#F7F1E3] hover:bg-[#9c2a20] transition-colors"
+                      >
+                        + 新しい用語を追加
                       </button>
                     </div>
                   </div>
                 );
               })()
-            ) : (
-              // 本日のノルマ完了カード
-              <div className="border-2 border-[#1A1714] bg-[#F7F1E3] p-4 sm:p-5 shadow-[4px_4px_0_0_#1A1714]">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-2xl sm:text-3xl">🎉</span>
-                  <div>
-                    <h3 className="font-serif text-lg sm:text-xl font-bold text-[#1A1714]">本日の復習はすべて完了！</h3>
-                    <p className="text-[10px] font-mono font-bold text-[#8a6300]">ALL CLEAR TODAY</p>
-                  </div>
-                </div>
-                <p className="mt-2 text-xs sm:text-sm font-bold leading-relaxed text-[#1A1714]/80">
-                  「{getCompletionMessage(coach)}」
-                </p>
-
-                {/* レベル分布ミニバー */}
-                <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
-                  <p className="text-[10px] font-bold text-[#1A1714]/60 mb-1.5">定着レベル分布（全 {terms.length} 件）</p>
-                  <div className="grid grid-cols-5 gap-1 text-center font-mono text-xs">
-                    {levelCounts.map((count, lvl) => (
-                      <div key={lvl} className="border border-[#1A1714]/30 bg-white/70 p-1">
-                        <p className="text-[9px] text-[#1A1714]/60">Lv.{lvl}</p>
-                        <p className="font-bold text-xs text-[#1A1714]">{count}<span className="text-[9px] font-normal">件</span></p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'standard' })}
-                    className="border-2 border-[#1A1714] bg-white px-3 py-2 text-xs font-bold hover:bg-[#1A1714] hover:text-[#F7F1E3] transition-colors"
-                  >
-                    ✍️ 先取り復習 ({sessionLimit > 0 ? `${sessionLimit}問` : '全問'})
-                  </button>
-                  <button
-                    onClick={() => startQuiz({ forceAll: true, reset: true, mode: 'quick' })}
-                    className="border-2 border-[#1A1714] bg-[#D9A441]/20 px-3 py-2 text-xs font-bold text-[#8a6300] hover:bg-[#D9A441] hover:text-[#1A1714] transition-colors"
-                  >
-                    ⚡ 4択で先取り
-                  </button>
-                  <button
-                    onClick={() => setView('add')}
-                    className="border-2 border-[#1A1714] bg-[#B83227] px-3 py-2 text-xs font-bold text-[#F7F1E3] hover:bg-[#9c2a20] transition-colors"
-                  >
-                    + 新しい用語を追加
-                  </button>
-                </div>
-              </div>
             )}
 
             {/* 知識定着度メーター（スリム常設） */}
