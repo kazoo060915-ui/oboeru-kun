@@ -49,6 +49,28 @@ async function handleNotification(req: NextRequest) {
     // 日本時間の「今日」。UTC基準だと Cron 実行時（07:00 JST = 22:00 UTC）に
     // 前日の日付になり、今日ぶんの用語を丸ごと取りこぼしていた。
     const today = todayStr();
+
+    // ── 重複送信防止ガード（Vercelの別プロジェクト重複やCronリトライ対策） ──
+    // 手動テスト実行（?force=true）以外の定期Cron実行時、今日すでに送信済みならスキップする。
+    const isForce = req.nextUrl.searchParams.get('force') === 'true';
+    if (!isForce && isSupabaseConfigured && supabase) {
+      const { data: userSet } = await supabase
+        .from('user_settings')
+        .select('last_notified_date')
+        .eq('user_id', 'default_user')
+        .maybeSingle();
+
+      if (userSet && (userSet as any).last_notified_date === today) {
+        console.log(`[Notification] Already sent today (${today}). Skipping duplicate notification.`);
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          message: `本日（${today}）の朝の通知はすでに送信済みです。`,
+          results: { line: 'skipped (本日送信済み)', email: 'skipped (本日送信済み)' },
+        });
+      }
+    }
+
     let dueTerms: { term: string }[] = [];
 
     if (isSupabaseConfigured && supabase) {
@@ -176,6 +198,14 @@ async function handleNotification(req: NextRequest) {
         },
         { status: 502 }
       );
+    }
+
+    // 送信成功した日付を記録（1日1回送信ロック）
+    if (isSupabaseConfigured && supabase) {
+      await supabase
+        .from('user_settings')
+        .update({ last_notified_date: today })
+        .eq('user_id', 'default_user');
     }
 
     return NextResponse.json({
