@@ -57,6 +57,8 @@ export default function Home() {
 
   // セッション問題数設定 (3 | 5 | 10 | 0 = 無制限)
   const [sessionLimit, setSessionLimit] = useState<number>(3);
+  // ペース変更UIの開閉（普段は畳んでおき、変えたい人だけ開く）
+  const [showPaceOptions, setShowPaceOptions] = useState(false);
   const [sessionIndex, setSessionIndex] = useState<number>(1);
   const [sessionScores, setSessionScores] = useState<number[]>([]);
   // 今回のセッションでのレベル変動履歴（リザルト画面表示用）
@@ -1070,10 +1072,20 @@ export default function Home() {
                   </button>
                 </div>
 
-                {/* 問題数コース選択 */}
-                <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
-                  <p className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/70 mb-1">何問チャレンジする？</p>
-                  <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
+                {/* 問題数コース選択（普段は畳んでおく） */}
+                <div className="mt-3 border-t border-[#1A1714]/15 pt-2 flex items-center justify-between">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/60">
+                    {sessionLimit > 0 ? `${sessionLimit}問` : '全問'}チャレンジ
+                  </span>
+                  <button
+                    onClick={() => setShowPaceOptions((v) => !v)}
+                    className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/60 underline hover:text-[#1A1714]"
+                  >
+                    問題数を変える {showPaceOptions ? '▲' : '▼'}
+                  </button>
+                </div>
+                {showPaceOptions && (
+                  <div className="mt-1.5 grid grid-cols-4 gap-1.5 font-mono text-xs">
                     {[
                       { count: 3, label: '3問', time: '1分' },
                       { count: 5, label: '5問', time: '3分' },
@@ -1094,7 +1106,7 @@ export default function Home() {
                       </button>
                     ))}
                   </div>
-                </div>
+                )}
 
                 <div className="mt-3.5 flex flex-col sm:flex-row gap-2">
                   <button
@@ -1210,13 +1222,20 @@ export default function Home() {
                         </p>
                       </div>
 
-                      {/* 問題数ペース選択 */}
-                      <div className="mt-3 border-t border-[#1A1714]/15 pt-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/70">今日のペースを選ぶ</p>
-                          <span className="font-mono text-[9px] text-[#1A1714]/50">タップで目標変更</span>
-                        </div>
-                        <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
+                      {/* 問題数ペース選択（普段は畳んでおく） */}
+                      <div className="mt-3 border-t border-[#1A1714]/15 pt-2 flex items-center justify-between">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/60">
+                          目標: {sessionLimit > 0 ? `${sessionLimit}問` : '全問'}
+                        </span>
+                        <button
+                          onClick={() => setShowPaceOptions((v) => !v)}
+                          className="text-[10px] sm:text-[11px] font-bold text-[#1A1714]/60 underline hover:text-[#1A1714]"
+                        >
+                          ペースを変える {showPaceOptions ? '▲' : '▼'}
+                        </button>
+                      </div>
+                      {showPaceOptions && (
+                        <div className="mt-1.5 grid grid-cols-4 gap-1.5 font-mono text-xs">
                           {[
                             { count: 3, label: '3問', time: '1分' },
                             { count: 5, label: '5問', time: '3分' },
@@ -1237,7 +1256,7 @@ export default function Home() {
                             </button>
                           ))}
                         </div>
-                      </div>
+                      )}
 
                       {/* 出題開始ボタン */}
                       <div className="mt-3.5 space-y-2">
