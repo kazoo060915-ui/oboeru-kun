@@ -2246,11 +2246,14 @@ function InteractiveExplanation({
   onWordClick,
   onAddTerm,
 }: InteractiveExplanationProps) {
-  // 合格ラインとなる模範フレーズ（modelAnswer または 本文中の最初の『...』）
+  // 合格ラインとなる模範フレーズ（modelAnswer または 本文中の意味のある『...』）
   const displayModelAnswer = React.useMemo(() => {
     if (modelAnswer?.trim()) return modelAnswer.trim();
-    const match = text.match(/『([^』]+)』/);
-    if (match) return match[1];
+    // 本文中の『...』をすべて抽出
+    const matches = Array.from(text.matchAll(/『([^』]+)』/g)).map((m) => m[1]);
+    // 10文字以上の説明フレーズを優先（短い単語より説明文を拾う）
+    const phrase = matches.find((m) => m.length >= 10) || matches[0];
+    if (phrase) return phrase;
     return null;
   }, [modelAnswer, text]);
 

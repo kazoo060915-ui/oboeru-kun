@@ -468,6 +468,7 @@ export async function gradeAnswer(
   return {
     score: Math.min(100, Math.max(0, Math.round(score))),
     tsukkomi: stripMarkdownSymbols(parsed.tsukkomi || fallback.tsukkomi),
+    model_answer: stripMarkdownSymbols(parsed.model_answer || fallback.model_answer || ''),
     correct: stripMarkdownSymbols(parsed.correct || fallback.correct),
     missed: Array.isArray(parsed.missed) ? parsed.missed.map((m) => stripMarkdownSymbols(m)) : [],
     mission: stripMarkdownSymbols(parsed.mission || fallback.mission),
